@@ -41,7 +41,14 @@ params = {
         "type": "float",
         "min": 0.1,     # min, max are just guesses 
         "max": 1.0,  
-        "default": 1.0/3}
+        "default": 1.0/3
+    },
+    "z0": {            # surface roughness
+        "type": "float",
+        "min": 1e-4,     # min, max are just guesses 
+        "max": 1.0,  
+        "default": 1.6e-4
+    },
 }
 
 # 3. Wrap Application
@@ -50,7 +57,7 @@ params = {
 encoder = uq.encoders.GenericEncoder(template_fname=template,
                                      target_filename=input_filename)
 
-output_columns = ['cfrac', 'lwp', 'zb', 'zi', 'prec', 'wq', 'wtheta']
+output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we']
 
 decoder = uq.decoders.SimpleCSV(
             target_filename=out_file,
@@ -67,12 +74,14 @@ my_campaign.add_app(name="dales",
                     )
 
 # 4. Specify Sampler
-#    
+
 vary = {
     "Nc_0"    : cp.Uniform(50e6, 100e6),
-    "cf"      : cp.Uniform(2,3)}
-#    "Prandtl" : cp.Uniform(0.2, 0.4), 
-#}
+    "cf"      : cp.Uniform(2.4, 2.6),
+    "Prandtl" : cp.Uniform(0.2, 0.4),
+    "z0"      : cp.Uniform(1e-4, 2e-4), 
+}
+
 
 my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=2,
                                    quadrature_rule="G")
@@ -90,28 +99,12 @@ print(my_campaign)
 # 7. Run Application
 #    - dales is executed for each sample
 
+#link='/usr/bin/ln -s ../../../input/* ./' #make links to input data in each run directory
+# doesn't work - used with an absolute path.
+
 link=f"link.sh {cwd+'/input'}"
 postproc="postproc.py"
 my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(link))
-my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(cmd))
-
-my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(postproc, interpret='python3'))
-
-# 8. Collate output
-my_campaign.collate()
-
-# 9. Run Analysis
-analysis = uq.analysis.SCAnalysis(sampler=my_sampler, qoi_cols=output_columns)
-
-my_campaign.apply_analysis(analysis)
-
-results = my_campaign.get_last_analysis()
-
-
-for qoi in output_columns:
-    print(qoi, results['statistical_moments'][qoi]['mean'], 
-               results['statistical_moments'][qoi]['std'],
-               'sobols:', results['sobols'][qoi],
-               'sobols_first:', results['sobols_first'][qoi])
-
+#my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(cmd))
+my_campaign.save_state("campaign_state.json")
 

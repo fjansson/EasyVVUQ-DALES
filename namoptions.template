@@ -27,7 +27,7 @@ xtime      =  0.0
 /
 
 &PHYSICS
-z0         =  1.6e-4
+z0         =  $z0
 ustin      =  0.32
 ps         =  101540.00
 thls       =  298.5
@@ -108,5 +108,5 @@ ltend      = .true.
 /
 &NAMCLOUDFIELD
 dtav=1440
-lcloudfield = .true.
+lcloudfield = .false.
 /
