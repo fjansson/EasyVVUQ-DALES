@@ -1,7 +1,10 @@
 import os
+import subprocess
+import argparse
 import easyvvuq as uq
 import chaospy as cp
-import argparse
+
+
 
 # Trying DALES with EasyVVUQ
 # based on EasyVVUQ gauss tutorial
@@ -11,23 +14,30 @@ import argparse
 #
 #    gauss.py is in current directory and takes one input file
 #    and writes to 'output.csv'.
-dales_exe = "~/code/official-dales/build/src/dales4"
+dales_exe = "~/dales/build/src/dales4"
 cwd = os.getcwd()
 input_filename = 'namoptions.001'
 cmd = f"{dales_exe} {input_filename}"
 out_file = "results.csv"
 postproc="postproc.py"
-work_dir="/tmp"
+work_dir="/export/scratch3/jansson/uq-work/"
+state_file_name="campaign_state.json"
 
 # Template input to substitute values into for each run
-template = f"{cwd}/namoptions.template"
+#template = f"{cwd}/namoptions.template"
+template = f"{cwd}/namoptions-1h-10x10.template"
+
 
 # Parameter handling 
 parser = argparse.ArgumentParser(description="EasyVVUQ for DALES")
 parser.add_argument("--prepare",  action="store_true", default=False,
                     help="Prepare run directories")
+parser.add_argument("--run",  action="store_true", default=False,
+                    help="Run model, sequentially")
 parser.add_argument("--analyze",  action="store_true", default=False,
                     help="Analyze results")
+parser.add_argument("--sampler",  default="sc", choices=['sc', 'pce'],
+                    help="UQ method, sc is the default.")
 args = parser.parse_args()
 
 # 2. Parameter space definition
@@ -80,10 +90,10 @@ params = {
 
 vary = {
     "Nc_0"    : cp.Uniform(50e6, 100e6),
-#    "cf"      : cp.Uniform(2.4, 2.6),
-    "cn"      : cp.Uniform(0.5, 0.9),
+    "cf"      : cp.Uniform(2.4, 2.6),
+#    "cn"      : cp.Uniform(0.5, 0.9),
 #    "Rigc"    : cp.Uniform(0.1, 0.4),
-#    "Prandtl" : cp.Uniform(0.2, 0.4),
+    "Prandtl" : cp.Uniform(0.2, 0.4),
 #    "z0"      : cp.Uniform(1e-4, 2e-4),
 }
 
@@ -106,8 +116,13 @@ unit={
 }
 
 # 4. Specify Sampler
-my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=2,
-                                   quadrature_rule="G")
+if args.sampler=='sc':
+    my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=3,
+                                       quadrature_rule="G")
+elif args.sampler=='pce':
+    my_sampler = uq.sampling.PCESampler(vary=vary, polynomial_order=1,
+                                        quadrature_rule="G")
+
     
 if args.prepare:
     # 1. Create campaign
@@ -150,20 +165,27 @@ if args.prepare:
     link=f"link.sh {cwd+'/input'}"
 
     my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(link))
-    #my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(cmd))
-    my_campaign.save_state("campaign_state.json")
-
-
-
+    
+    my_campaign.save_state(state_file_name)
 
 ################################################
 
 
-if args.analyze:
-    my_campaign = uq.Campaign(state_file="campaign_state.json", work_dir=work_dir)
+if args.run:
+    my_campaign = uq.Campaign(state_file=state_file_name, work_dir=work_dir)
 
-    my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=2,
-                                       quadrature_rule="G")
+    # run sequentially
+    # my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(cmd))
+
+    pcmd = "ls -d %s/runs/Run_* | parallel -j 12 'cd {} ; ~/dales/build/src/dales4 namoptions.001 > output.txt ;  cd .. '"%my_campaign.campaign_dir
+    print ('Parallel run command', pcmd)
+    subprocess.call(pcmd, shell=True)
+    my_campaign.save_state(state_file_name)
+
+################################################
+
+if args.analyze:
+    my_campaign = uq.Campaign(state_file=state_file_name, work_dir=work_dir)
 
 
     my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(postproc, interpret='python3'))
@@ -172,15 +194,20 @@ if args.analyze:
     my_campaign.collate()
 
     # 9. Run Analysis
-    analysis = uq.analysis.SCAnalysis(sampler=my_sampler, qoi_cols=output_columns)
+    if args.sampler == 'sc':
+        analysis = uq.analysis.SCAnalysis(sampler=my_sampler, qoi_cols=output_columns)
+    elif args.sampler == 'pce':
+        analysis = uq.analysis.PCEAnalysis(sampler=my_sampler, qoi_cols=output_columns)
+
     my_campaign.apply_analysis(analysis)
     results = my_campaign.get_last_analysis()
 
-    for qoi in output_columns:
-        print(qoi, results['statistical_moments'][qoi]['mean'], 
-              results['statistical_moments'][qoi]['std'],
-              'sobols:', results['sobols'][qoi],
-        ) #'sobols_first:', results['sobols_first'][qoi])
+    if args.sampler == 'sc':  # multi-var Sobol indices are not available for PCE
+        for qoi in output_columns: 
+            print(qoi, results['statistical_moments'][qoi]['mean'], 
+                  results['statistical_moments'][qoi]['std'],
+                  'sobols:', results['sobols'][qoi],
+            ) #'sobols_first:', results['sobols_first'][qoi])
 
 
 
