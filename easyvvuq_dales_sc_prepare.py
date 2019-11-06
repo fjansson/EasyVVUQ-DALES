@@ -29,31 +29,50 @@ params = {
         "type": "float",
         "min": 0.1e6,
         "max": 1000e6,
-        "default": 70e6
+        "default": 70e6,
+        "unit" : "m^-3"
     },
     "cf": {  # cf subgrid filter constant
         "type": "float",
         "min": 1.0,     # min, max are just guesses 
         "max": 4.0,  
-        "default": 2.5
+        "default": 2.5,
+        "unit" : ""
+    },
+    "cn": {  # Subfilterscale parameter
+        "type": "float",
+        "min": 0.5,     # min, max are just guesses 
+        "max": 1.0,  
+        "default": 0.76,
+        "unit" : ""
+    },
+    "Rigc": {  # Critical Richardson number
+        "type": "float",
+        "min": 0.1,     # min, max are just guesses 
+        "max": 1.0,  
+        "default": 0.25,
+        "unit" : ""
     },
     "Prandtl": {  # Prandtl number, subgrid.
         "type": "float",
         "min": 0.1,     # min, max are just guesses 
         "max": 1.0,  
-        "default": 1.0/3
+        "default": 1.0/3,
+        "unit" : ""
     },
-    "z0": {            # surface roughness
+    "z0": {            # surface roughness  
         "type": "float",
         "min": 1e-4,     # min, max are just guesses 
         "max": 1.0,  
-        "default": 1.6e-4
+        "default": 1.6e-4,
+        "unit" : "m"
     },
 }
 
+
 # 3. Wrap Application
 #    - Define a new application (we'll call it 'gauss'), and the encoding/decoding elements it needs
-#    - Also requires a collation element - his will be responsible for aggregating the results
+#    - Also requires a collation element - this will be responsible for aggregating the results
 encoder = uq.encoders.GenericEncoder(template_fname=template,
                                      target_filename=input_filename)
 
@@ -78,10 +97,11 @@ my_campaign.add_app(name="dales",
 vary = {
     "Nc_0"    : cp.Uniform(50e6, 100e6),
     "cf"      : cp.Uniform(2.4, 2.6),
+    "cn"      : cp.Uniform(0.5, 0.9),
+    "Rigc"    : cp.Uniform(0.1, 0.4),
     "Prandtl" : cp.Uniform(0.2, 0.4),
-    "z0"      : cp.Uniform(1e-4, 2e-4), 
+#    "z0"      : cp.Uniform(1e-4, 2e-4),
 }
-
 
 my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=2,
                                    quadrature_rule="G")

@@ -36,6 +36,20 @@ params = {
         "default": 2.5,
         "unit" : ""
     },
+    "cn": {  # Subfilterscale parameter
+        "type": "float",
+        "min": 0.5,     # min, max are just guesses 
+        "max": 1.0,  
+        "default": 0.76,
+        "unit" : ""
+    },
+    "Rigc": {  # Critical Richardson number
+        "type": "float",
+        "min": 0.1,     # min, max are just guesses 
+        "max": 1.0,  
+        "default": 0.25,
+        "unit" : ""
+    },
     "Prandtl": {  # Prandtl number, subgrid.
         "type": "float",
         "min": 0.1,     # min, max are just guesses 
@@ -55,8 +69,10 @@ params = {
 vary = {
     "Nc_0"    : cp.Uniform(50e6, 100e6),
     "cf"      : cp.Uniform(2.4, 2.6),
+    "cn"      : cp.Uniform(0.5, 0.9),
+    "Rigc"    : cp.Uniform(0.1, 0.4),
     "Prandtl" : cp.Uniform(0.2, 0.4),
-    "z0"      : cp.Uniform(1e-4, 2e-4), 
+#    "z0"      : cp.Uniform(1e-4, 2e-4),
 }
 
 output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we']
@@ -98,12 +114,20 @@ unit={
      'we'    :'m/s',      
 }
 
-var = list(vary.keys())
 print()
-print("                                          Sobol indices")
+print('         --- Varied input parameters ---')
+print("  param    default      unit     distribution")
+for k in vary.keys():
+    print("%8s %9.3g %9s  %s"%(k, params[k]['default'], params[k]['unit'], str(vary[k])))
+print()
+
+print('         --- Output ---')
+var = list(vary.keys())
+
+print("                                            Sobol indices")
 print("       QOI      mean       std      unit  ", end='')
 for v in var:
-    print('%6s'%v, end=' ')
+    print('%9s'%v, end=' ')
 print()
 
 for qoi in output_columns:
@@ -111,7 +135,7 @@ for qoi in output_columns:
     print("% 9.3g % 9.3g"%(results['statistical_moments'][qoi]['mean'], results['statistical_moments'][qoi]['std']), end=' ')
     print("%9s"%unit[qoi], end='  ')
     for v in var:
-        print('%6.4g'%results['sobols_first'][qoi][v], end=' ')
+        print('%9.3g'%results['sobols_first'][qoi][v], end=' ')
     print()
     
     

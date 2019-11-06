@@ -1,6 +1,7 @@
 import os
 import easyvvuq as uq
 import chaospy as cp
+import argparse
 
 # Trying DALES with EasyVVUQ
 # based on EasyVVUQ gauss tutorial
@@ -15,13 +16,19 @@ cwd = os.getcwd()
 input_filename = 'namoptions.001'
 cmd = f"{dales_exe} {input_filename}"
 out_file = "results.csv"
+postproc="postproc.py"
+work_dir="/tmp"
 
 # Template input to substitute values into for each run
 template = f"{cwd}/namoptions.template"
 
-# 1. Create campaign
-my_campaign = uq.Campaign(name='dales', work_dir="/tmp")
-# all run directories created under workdir
+# Parameter handling 
+parser = argparse.ArgumentParser(description="EasyVVUQ for DALES")
+parser.add_argument("--prepare",  action="store_true", default=False,
+                    help="Prepare run directories")
+parser.add_argument("--analyze",  action="store_true", default=False,
+                    help="Analyze results")
+args = parser.parse_args()
 
 # 2. Parameter space definition
 params = {
@@ -29,89 +36,182 @@ params = {
         "type": "float",
         "min": 0.1e6,
         "max": 1000e6,
-        "default": 70e6
+        "default": 70e6,
+#        "unit" : "m^-3"
     },
     "cf": {  # cf subgrid filter constant
         "type": "float",
         "min": 1.0,     # min, max are just guesses 
         "max": 4.0,  
-        "default": 2.5
+        "default": 2.5,
+#        "unit" : ""
+    },
+    "cn": {  # Subfilterscale parameter
+        "type": "float",
+        "min": 0.5,     # min, max are just guesses 
+        "max": 1.0,  
+        "default": 0.76,
+#        "unit" : ""
+    },
+    "Rigc": {  # Critical Richardson number
+        "type": "float",
+        "min": 0.1,     # min, max are just guesses 
+        "max": 1.0,  
+        "default": 0.25,
+#        "unit" : ""
     },
     "Prandtl": {  # Prandtl number, subgrid.
         "type": "float",
         "min": 0.1,     # min, max are just guesses 
         "max": 1.0,  
-        "default": 1.0/3}
+        "default": 1.0/3,
+#        "unit" : ""
+    },
+    "z0": {            # surface roughness  
+        "type": "float",
+        "min": 1e-4,     # min, max are just guesses 
+        "max": 1.0,  
+        "default": 1.6e-4,
+#        "unit" : "m"
+    },
 }
 
-# 3. Wrap Application
-#    - Define a new application (we'll call it 'gauss'), and the encoding/decoding elements it needs
-#    - Also requires a collation element - his will be responsible for aggregating the results
-encoder = uq.encoders.GenericEncoder(template_fname=template,
-                                     target_filename=input_filename)
+# can't have extra fields in params dict.
 
-output_columns = ['cfrac', 'lwp', 'zb', 'zi', 'prec', 'wq', 'wtheta']
-
-decoder = uq.decoders.SimpleCSV(
-            target_filename=out_file,
-            output_columns=output_columns,
-            header=0)
-
-collater = uq.collate.AggregateSamples(average=False)
-
-my_campaign.add_app(name="dales",
-                    params=params,
-                    encoder=encoder,
-                    decoder=decoder,
-                    collater=collater
-                    )
-
-# 4. Specify Sampler
-#    
 vary = {
     "Nc_0"    : cp.Uniform(50e6, 100e6),
-    "cf"      : cp.Uniform(2,3)}
-#    "Prandtl" : cp.Uniform(0.2, 0.4), 
-#}
+#    "cf"      : cp.Uniform(2.4, 2.6),
+    "cn"      : cp.Uniform(0.5, 0.9),
+#    "Rigc"    : cp.Uniform(0.1, 0.4),
+#    "Prandtl" : cp.Uniform(0.2, 0.4),
+#    "z0"      : cp.Uniform(1e-4, 2e-4),
+}
 
+
+
+output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we']
+unit={
+     'cfrac' :'',
+     'lwp'   :'kg/m^2',
+     'rwp'   :'kg/m^2',
+     'zb'    :'m',
+     'zi'    :'m',
+     'prec'  : 'W/m^2',
+     'wq'    :'kg/kg m/s',
+     'wtheta':'K m/s',
+     'we'    :'m/s',
+
+    'z0' : 'm',
+    'Nc_0' : 'm^-3',
+}
+
+# 4. Specify Sampler
 my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=2,
                                    quadrature_rule="G")
+    
+if args.prepare:
+    # 1. Create campaign
+    my_campaign = uq.Campaign(name='dales', work_dir=work_dir)
+    # all run directories created under workdir
 
-my_campaign.set_sampler(my_sampler)
+    # 3. Wrap Application
+    #    - Define a new application (we'll call it 'gauss'), and the encoding/decoding elements it needs
+    #    - Also requires a collation element - this will be responsible for aggregating the results
+    encoder = uq.encoders.GenericEncoder(template_fname=template,
+                                     target_filename=input_filename)
+    decoder = uq.decoders.SimpleCSV(
+        target_filename=out_file,
+        output_columns=output_columns,
+        header=0)
 
-# 5. Get run parameters
-my_campaign.draw_samples()
+    collater = uq.collate.AggregateSamples(average=False)
 
-# 6. Create run input directories
-my_campaign.populate_runs_dir()
+    my_campaign.add_app(name="dales",
+                        params=params,
+                        encoder=encoder,
+                        decoder=decoder,
+                        collater=collater
+    )
 
-print(my_campaign)
+    my_campaign.set_sampler(my_sampler)
+    
+    # 5. Get run parameters
+    my_campaign.draw_samples()
 
-# 7. Run Application
-#    - dales is executed for each sample
-
-link=f"link.sh {cwd+'/input'}"
-postproc="postproc.py"
-my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(link))
-my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(cmd))
-
-my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(postproc, interpret='python3'))
-
-# 8. Collate output
-my_campaign.collate()
-
-# 9. Run Analysis
-analysis = uq.analysis.SCAnalysis(sampler=my_sampler, qoi_cols=output_columns)
-
-my_campaign.apply_analysis(analysis)
-
-results = my_campaign.get_last_analysis()
+    # 6. Create run input directories
+    my_campaign.populate_runs_dir()
 
 
-for qoi in output_columns:
-    print(qoi, results['statistical_moments'][qoi]['mean'], 
-               results['statistical_moments'][qoi]['std'],
-               'sobols:', results['sobols'][qoi],
-               'sobols_first:', results['sobols_first'][qoi])
+    print(my_campaign)
+
+    # 7. Run Application
+    #    - dales is executed for each sample
+    
+    link=f"link.sh {cwd+'/input'}"
+
+    my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(link))
+    #my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(cmd))
+    my_campaign.save_state("campaign_state.json")
+
+
+
+
+################################################
+
+
+if args.analyze:
+    my_campaign = uq.Campaign(state_file="campaign_state.json", work_dir=work_dir)
+
+    my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=2,
+                                       quadrature_rule="G")
+
+
+    my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(postproc, interpret='python3'))
+
+    # 8. Collate output
+    my_campaign.collate()
+
+    # 9. Run Analysis
+    analysis = uq.analysis.SCAnalysis(sampler=my_sampler, qoi_cols=output_columns)
+    my_campaign.apply_analysis(analysis)
+    results = my_campaign.get_last_analysis()
+
+    for qoi in output_columns:
+        print(qoi, results['statistical_moments'][qoi]['mean'], 
+              results['statistical_moments'][qoi]['std'],
+              'sobols:', results['sobols'][qoi],
+        ) #'sobols_first:', results['sobols_first'][qoi])
+
+
+
+
+    print()
+    print('         --- Varied input parameters ---')
+    print("  param    default      unit     distribution")
+    for k in vary.keys():
+        print("%8s %9.3g %9s  %s"%(k, params[k]['default'], unit.get(k, ''), str(vary[k])))
+    print()
+
+    print('         --- Output ---')
+    var = list(vary.keys())
+
+    print("                                            Sobol indices")
+    print("       QOI      mean       std      unit  ", end='')
+    for v in var:
+        print('%9s'%v, end=' ')
+    print()
+
+    for qoi in output_columns:
+        print("%10s"%qoi, end=' ')
+        print("% 9.3g % 9.3g"%(results['statistical_moments'][qoi]['mean'], results['statistical_moments'][qoi]['std']), end=' ')
+        print("%9s"%unit[qoi], end='  ')
+        for v in var:
+            print('%9.3g'%results['sobols_first'][qoi][v], end=' ')
+        print()
+    
+    
+
+    
+
 
 
