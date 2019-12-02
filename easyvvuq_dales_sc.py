@@ -24,8 +24,8 @@ work_dir="/export/scratch3/jansson/uq-work/"
 state_file_name="campaign_state.json"
 
 # Template input to substitute values into for each run
-#template = f"{cwd}/namoptions.template"
-template = f"{cwd}/namoptions-1h-10x10.template"
+template = f"{cwd}/namoptions.template"
+#template = f"{cwd}/namoptions-1h-10x10.template"
 
 
 # Parameter handling 
@@ -37,7 +37,10 @@ parser.add_argument("--run",  action="store_true", default=False,
 parser.add_argument("--analyze",  action="store_true", default=False,
                     help="Analyze results")
 parser.add_argument("--sampler",  default="sc", choices=['sc', 'pce'],
-                    help="UQ method, sc is the default.")
+                    help="UQ sampling method, sc is the default.")
+parser.add_argument("--order",  default="2", type=int,
+                    help="Sampler order")
+
 args = parser.parse_args()
 
 # 2. Parameter space definition
@@ -117,10 +120,10 @@ unit={
 
 # 4. Specify Sampler
 if args.sampler=='sc':
-    my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=3,
+    my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=args.order,
                                        quadrature_rule="G")
 elif args.sampler=='pce':
-    my_sampler = uq.sampling.PCESampler(vary=vary, polynomial_order=1,
+    my_sampler = uq.sampling.PCESampler(vary=vary, polynomial_order=args.order,
                                         quadrature_rule="G")
 
     
@@ -212,7 +215,7 @@ if args.analyze:
 
 
 
-    print()
+    print(f"sampler: {args.sampler}, order: {args.order}")
     print('         --- Varied input parameters ---')
     print("  param    default      unit     distribution")
     for k in vary.keys():
