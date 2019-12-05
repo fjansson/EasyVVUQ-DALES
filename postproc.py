@@ -5,12 +5,14 @@
 # quantities, averages them over last half of the run.
 # Writes output to results.csv
 
-from netCDF4 import Dataset
 import numpy
+import json
+from netCDF4 import Dataset
+
 
 d = Dataset("tmser.001.nc", 'r')
 
-cfrac   = d.variables['cfrac'][:]
+gcfrac   = d.variables['cfrac'][:]     # global cloud fraction
 lwp_bar = d.variables['lwp_bar'][:]
 zb = d.variables['zb'][:]
 zi = d.variables['zi'][:]
@@ -19,8 +21,8 @@ wtheta = d.variables['wtheta'][:]
 we = d.variables['we'][:]
 
 # compute means over last half of simulation
-l = len(cfrac)
-cfrac_avg = numpy.mean(cfrac[l//2:l])
+l = len(gcfrac)
+gcfrac_avg = numpy.mean(gcfrac[l//2:l])
 lwp_bar_avg = numpy.mean(lwp_bar[l//2:l])
 zb_avg = numpy.mean(zb[l//2:l])
 zi_avg = numpy.mean(zi[l//2:l])
@@ -31,43 +33,67 @@ we_avg = numpy.mean(we[l//2:l])
 p = Dataset("profiles.001.nc", 'r')
 # precipitation flux at lowest level
 prec    = p.variables["precmn"][:,0]  
-qr_prof = p.variables["sv002"][:,:]
+qr      = p.variables["sv002"][:,:]
+ql      = p.variables["ql"][:,:]
+qt      = p.variables["u"][:,:]
+u       = p.variables["v"][:,:]
+v       = p.variables["qt"][:,:]
+thl     = p.variables["thl"][:,:]
 rhof    = p.variables["rhof"][:,:]
-zh      = p.variables["zm"][:]  # half-level heights  # dzf(k) = zh(k+1) - zh(k)
+zcfrac  = p.variables["cfrac"][:,:]  # z-dependent cloud fraction
+zh      = p.variables["zm"][:]       # half-level heights  # dzf(k) = zh(k+1) - zh(k)
 dzf = zh[1:] - zh[:-1]
+
 
 # print (len(dzf), len(zh), len(rhof[0,:]))
 #print ('dzf', dzf)
 ldzf = len(dzf)
-rwp = numpy.sum(qr_prof[:,0:ldzf] * rhof[:,0:ldzf] * dzf[:], axis=1)  # rwp over time
+rwp = numpy.sum(qr[:,0:ldzf] * rhof[:,0:ldzf] * dzf[:], axis=1)  # rwp over time
 #print ('rwp', rwp)
 
 l = len(prec)
 prec_avg = numpy.mean(prec[l//2:l])
 rwp_avg = numpy.mean(rwp[l//2:l])
-out_file = open('results.csv', 'wt')
+
+qr_avg     = numpy.mean(qr[l//2:l], axis=0)
+ql_avg     = numpy.mean(ql[l//2:l], axis=0)
+qt_avg     = numpy.mean(qt[l//2:l], axis=0)
+thl_avg    = numpy.mean(thl[l//2:l], axis=0)
+u_avg      = numpy.mean(u[l//2:l], axis=0)
+v_avg      = numpy.mean(v[l//2:l], axis=0)
+zcfrac_avg = numpy.mean(zcfrac[l//2:l], axis=0)
 
 
+with open('results.csv', 'wt') as out_file:
+    # needs one row of headers, then row(s) of data
+    # spaces not allowed in column names (or the space becomes part of the name)
+    print("cfrac,lwp,rwp,zb,zi,prec,wq,wtheta,we", file=out_file)
+    print(f"{gcfrac_avg},{lwp_bar_avg},{rwp_avg},{zb_avg},{zi_avg},{prec_avg},{wq_avg},{wtheta_avg},{we_avg}", file=out_file)
 
-# needs one row of headers, then row(s) of data
-# spaces not allowed(?)
-print("cfrac,lwp,rwp,zb,zi,prec,wq,wtheta,we", file=out_file)
-print(f"{cfrac_avg},{lwp_bar_avg},{rwp_avg},{zb_avg},{zi_avg},{prec_avg},{wq_avg},{wtheta_avg},{we_avg}", file=out_file)
 
-
-
-# did this anticipating json output
-# but there is no decoder for that
-results = {'cfrac' : cfrac_avg,
-           'lwp' : lwp_bar_avg,
-           'rwp' : rwp_avg,
-           'zb' : zb_avg,
-           'zi' : zi_avg,
-           'prec' : prec_avg,
-           'wq' : wq_avg,
-           'wtheta' : wtheta_avg,
-           'we' : we_avg,
+# did this anticipating json output  (but there is no decoder for that)
+results = {'cfrac' : float(gcfrac_avg),
+           'lwp' : float(lwp_bar_avg),
+           'rwp' : float(rwp_avg),
+           'zb' : float(zb_avg),
+           'zi' : float(zi_avg),
+           'prec' : float(prec_avg),
+           'wq' : float(wq_avg),
+           'wtheta' : float(wtheta_avg),
+           'we' : float(we_avg),
+           'qr' : qr_avg.tolist(),
+           'ql' : ql_avg.tolist(),
+           'qt' : qt_avg.tolist(),
+           'thl' : thl_avg.tolist(),
+           'u' : u_avg.tolist(),
+           'v' : v_avg.tolist(),
+           'zcfrac' : zcfrac_avg.tolist(),
 }
 
-print(results)
+#print(results)
+with open('results.json', 'w') as out_file:
+    json.dump(results, out_file, indent=2)
+
+
+
 

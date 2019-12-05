@@ -1,9 +1,10 @@
 import os
 import subprocess
 import argparse
+import sys
 import easyvvuq as uq
 import chaospy as cp
-
+import matplotlib.pyplot as plt
 
 
 # Trying DALES with EasyVVUQ
@@ -14,13 +15,16 @@ import chaospy as cp
 #
 #    gauss.py is in current directory and takes one input file
 #    and writes to 'output.csv'.
-dales_exe = "~/dales/build/src/dales4"
+#dales_exe = "~/dales/build/src/dales4"
+dales_exe = "~/code/official-dales/build/src/dales4"
+
 cwd = os.getcwd()
 input_filename = 'namoptions.001'
 cmd = f"{dales_exe} {input_filename}"
 out_file = "results.csv"
 postproc="postproc.py"
-work_dir="/export/scratch3/jansson/uq-work/"
+#work_dir="/export/scratch3/jansson/uq-work/"
+work_dir="/tmp"
 state_file_name="campaign_state.json"
 
 # Template input to substitute values into for each run
@@ -34,12 +38,17 @@ parser.add_argument("--prepare",  action="store_true", default=False,
                     help="Prepare run directories")
 parser.add_argument("--run",  action="store_true", default=False,
                     help="Run model, sequentially")
+parser.add_argument("--parallel", type=int, default=0,
+                    help="use parallel command to run model with N threads")
 parser.add_argument("--analyze",  action="store_true", default=False,
                     help="Analyze results")
-parser.add_argument("--sampler",  default="sc", choices=['sc', 'pce'],
+parser.add_argument("--sampler",  default="sc", choices=['sc', 'pce', 'random'],
                     help="UQ sampling method, sc is the default.")
+parser.add_argument("--num_samples",  default="10", type=int,
+                    help="number of samples for the random sampler.")
 parser.add_argument("--order",  default="2", type=int,
                     help="Sampler order")
+
 
 args = parser.parse_args()
 
@@ -87,6 +96,13 @@ params = {
         "default": 1.6e-4,
 #        "unit" : "m"
     },
+
+    "l_sb": { # flag for microphysics scheme: false - KK00 Khairoutdinov and Kogan, 2000              
+        "type": "integer",                 #   true - SB   Seifert and Beheng, 2001, 2006, Default
+        "min" : 0,  
+        "max" : 1,   # converted to Fortran .true., .false. in prep.sh 
+        "default" : 1
+    }
 }
 
 # can't have extra fields in params dict.
@@ -98,6 +114,7 @@ vary = {
 #    "Rigc"    : cp.Uniform(0.1, 0.4),
     "Prandtl" : cp.Uniform(0.2, 0.4),
 #    "z0"      : cp.Uniform(1e-4, 2e-4),
+#    "l_sb"    :  cp.DiscreteUniform(0, 1),  # discrete does not work with SC, PCE
 }
 
 
@@ -105,18 +122,24 @@ vary = {
 output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we']
 unit={
      'cfrac' :'',
-     'lwp'   :'kg/m^2',
-     'rwp'   :'kg/m^2',
+     'lwp'   :'g/m$^2$',
+     'rwp'   :'g/m$^2$',
      'zb'    :'m',
      'zi'    :'m',
-     'prec'  : 'W/m^2',
+     'prec'  : 'W/m$^2$',
      'wq'    :'kg/kg m/s',
      'wtheta':'K m/s',
      'we'    :'m/s',
 
     'z0' : 'm',
-    'Nc_0' : 'm^-3',
+    'Nc_0' : 'm$^{-3}$',
 }
+
+scale={ 
+    'lwp'   : 1000,  # convert kg/m^2 to g/m^2
+    'rwp'   : 1000,  # convert kg/m^2 to g/m^2
+}
+
 
 # 4. Specify Sampler
 if args.sampler=='sc':
@@ -125,6 +148,12 @@ if args.sampler=='sc':
 elif args.sampler=='pce':
     my_sampler = uq.sampling.PCESampler(vary=vary, polynomial_order=args.order,
                                         quadrature_rule="G")
+elif args.sampler=='random':
+    my_sampler = uq.sampling.RandomSampler(vary=vary)
+else:
+    print("Unknown sampler specified", args.sampler)
+    sys.exit()
+    
 
     
 if args.prepare:
@@ -154,7 +183,10 @@ if args.prepare:
     my_campaign.set_sampler(my_sampler)
     
     # 5. Get run parameters
-    my_campaign.draw_samples()
+    if args.sampler=='random':
+        my_campaign.draw_samples(num_samples=args.num_samples)
+    else:
+        my_campaign.draw_samples()
 
     # 6. Create run input directories
     my_campaign.populate_runs_dir()
@@ -165,7 +197,7 @@ if args.prepare:
     # 7. Run Application
     #    - dales is executed for each sample
     
-    link=f"link.sh {cwd+'/input'}"
+    link=f"prep.sh {cwd+'/input'}"
 
     my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(link))
     
@@ -179,10 +211,12 @@ if args.run:
 
     # run sequentially
     # my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(cmd))
-
-    pcmd = "ls -d %s/runs/Run_* | parallel -j 12 'cd {} ; ~/dales/build/src/dales4 namoptions.001 > output.txt ;  cd .. '"%my_campaign.campaign_dir
-    print ('Parallel run command', pcmd)
-    subprocess.call(pcmd, shell=True)
+    
+    if args.parallel:
+        pcmd = f"ls -d {my_campaign.campaign_dir}/runs/Run_* | parallel -j {args.parallel} 'cd {{}} ; {dales_exe} namoptions.001 > output.txt ;  cd .. '"
+        print ('Parallel run command', pcmd)
+        subprocess.call(pcmd, shell=True)
+        
     my_campaign.save_state(state_file_name)
 
 ################################################
@@ -197,11 +231,17 @@ if args.analyze:
     my_campaign.collate()
 
     # 9. Run Analysis
+    if args.sampler == 'random':
+        analysis = uq.analysis.BasicStats(qoi_cols=output_columns)
+        my_campaign.apply_analysis(analysis)
+        print("stats:\n", my_campaign.get_last_analysis())
+        sys.exit()
+        
     if args.sampler == 'sc':
         analysis = uq.analysis.SCAnalysis(sampler=my_sampler, qoi_cols=output_columns)
     elif args.sampler == 'pce':
-        analysis = uq.analysis.PCEAnalysis(sampler=my_sampler, qoi_cols=output_columns)
-
+        analysis = uq.analysis.PCEAnalysis(sampler=my_sampler, qoi_cols=output_columns)    
+        
     my_campaign.apply_analysis(analysis)
     results = my_campaign.get_last_analysis()
 
@@ -233,7 +273,7 @@ if args.analyze:
 
     for qoi in output_columns:
         print("%10s"%qoi, end=' ')
-        print("% 9.3g % 9.3g"%(results['statistical_moments'][qoi]['mean'], results['statistical_moments'][qoi]['std']), end=' ')
+        print("% 9.3g % 9.3g"%(results['statistical_moments'][qoi]['mean'] * scale.get(qoi,1), results['statistical_moments'][qoi]['std'] * scale.get(qoi,1)), end=' ')
         print("%9s"%unit[qoi], end='  ')
         for v in var:
             print('%9.3g'%results['sobols_first'][qoi][v], end=' ')
@@ -241,7 +281,27 @@ if args.analyze:
     
     
 
-    
+    # print(analysis.get_sample_array('cfrac'))  # just the sample values, no coordinates.
+    # print(my_campaign.get_collation_result()) # a Pandas dataframe
+    data = my_campaign.get_collation_result()
 
+    #plt.plot(data['Nc_0'], data['prec'], 'o')
+    params = vary.keys()
+    fig, ax = plt.subplots(nrows=len(output_columns), ncols=len(params),
+                        sharex='col', sharey='row', squeeze=False)
 
+    for i,param in enumerate(params):
+        for j,qoi in enumerate(output_columns):
+            x = data[param] * scale.get(param,1)
+            y = data[qoi]   * scale.get(qoi,1)
+            ax[j][i].plot(x, y, 'o')
+            xu = unit.get(param,'')
+            yu = unit.get(qoi,'')
+            if xu: xu = f"({xu})"
+            if yu: yu = f"({yu})"
+            ax[j][i].set(xlabel=f"{param} {xu}", ylabel=f"{qoi}\n{yu}")
 
+    for a in ax.flat:
+        a.label_outer()
+        a.ticklabel_format(axis='y', style='sci', scilimits=(-5,5), useOffset=None, useLocale=None, useMathText=True)            
+    plt.show()
