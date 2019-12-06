@@ -5,7 +5,7 @@ import sys
 import easyvvuq as uq
 import chaospy as cp
 import matplotlib.pyplot as plt
-
+from easyvvuq.decoders.json import JSONDecoder
 
 # Trying DALES with EasyVVUQ
 # based on EasyVVUQ gauss tutorial
@@ -21,7 +21,7 @@ dales_exe = "~/code/official-dales/build/src/dales4"
 cwd = os.getcwd()
 input_filename = 'namoptions.001'
 cmd = f"{dales_exe} {input_filename}"
-out_file = "results.csv"
+out_file = "results.json"
 postproc="postproc.py"
 #work_dir="/export/scratch3/jansson/uq-work/"
 work_dir="/tmp"
@@ -109,7 +109,7 @@ params = {
 
 vary = {
     "Nc_0"    : cp.Uniform(50e6, 100e6),
-    "cf"      : cp.Uniform(2.4, 2.6),
+#    "cf"      : cp.Uniform(2.4, 2.6),
 #    "cn"      : cp.Uniform(0.5, 0.9),
 #    "Rigc"    : cp.Uniform(0.1, 0.4),
     "Prandtl" : cp.Uniform(0.2, 0.4),
@@ -166,10 +166,14 @@ if args.prepare:
     #    - Also requires a collation element - this will be responsible for aggregating the results
     encoder = uq.encoders.GenericEncoder(template_fname=template,
                                      target_filename=input_filename)
-    decoder = uq.decoders.SimpleCSV(
+    #decoder = uq.decoders.SimpleCSV(
+    #    target_filename=out_file,
+    #    output_columns=output_columns,
+    #    header=0)
+
+    decoder = JSONDecoder(
         target_filename=out_file,
-        output_columns=output_columns,
-        header=0)
+        output_columns=output_columns)
 
     collater = uq.collate.AggregateSamples(average=False)
 
