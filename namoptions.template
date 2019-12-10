@@ -12,13 +12,13 @@ nsv        =  2
 /
 
 &DOMAIN
-itot       =  10
-jtot       =  10
+itot       =  $Nh
+jtot       =  $Nh
 kmax       =  126
 
 
-xsize      =  1000
-ysize      =  1000
+xsize      =  $extent
+ysize      =  $extent
 
 xlat       =  18.0
 xlon       =  298.5
@@ -62,6 +62,7 @@ iadv_sv    =  7
 &NAMMICROPHYSICS
 imicro     = 2
 Nc_0       = $Nc_0
+l_sb       = BOOLEAN$l_sb
 /
 &NAMSUBGRID
 cf = $cf
