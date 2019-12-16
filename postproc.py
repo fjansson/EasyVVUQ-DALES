@@ -8,6 +8,14 @@
 import numpy
 import json
 from netCDF4 import Dataset
+import subprocess
+
+
+# https://stackoverflow.com/a/136280/1333273
+def tail(f, n):
+    proc = subprocess.Popen(['tail', '-n', str(n), f], stdout=subprocess.PIPE)
+    lines = proc.stdout.readlines()
+    return lines
 
 
 d = Dataset("tmser.001.nc", 'r')
@@ -64,11 +72,22 @@ v_avg      = numpy.mean(v[l//2:l], axis=0)
 zcfrac_avg = numpy.mean(zcfrac[l//2:l], axis=0)
 
 
+# get wall clock time from output file
+walltime = -1
+try:
+    t = tail('output.txt', 1)[0]
+    walltime = float(t.split(b'=')[-1])
+except:
+    pass
+
+# print ('tail', t, 'walltime', walltime)
+
 with open('results.csv', 'wt') as out_file:
     # needs one row of headers, then row(s) of data
     # spaces not allowed in column names (or the space becomes part of the name)
-    print("cfrac,lwp,rwp,zb,zi,prec,wq,wtheta,we", file=out_file)
-    print(f"{gcfrac_avg},{lwp_bar_avg},{rwp_avg},{zb_avg},{zi_avg},{prec_avg},{wq_avg},{wtheta_avg},{we_avg}", file=out_file)
+    print("cfrac,lwp,rwp,zb,zi,prec,wq,wtheta,we,walltime", file=out_file)
+    print(f"{gcfrac_avg},{lwp_bar_avg},{rwp_avg},{zb_avg},{zi_avg},{prec_avg},{wq_avg},{wtheta_avg},{we_avg},{walltime}", file=out_file)
+
 
 
 # did this anticipating json output  (but there is no decoder for that)
@@ -88,6 +107,7 @@ results = {'cfrac' : float(gcfrac_avg),
            'u' : u_avg.tolist(),
            'v' : v_avg.tolist(),
            'zcfrac' : zcfrac_avg.tolist(),
+           'walltime' : walltime,
 }
 
 #print(results)
