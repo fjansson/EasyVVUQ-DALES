@@ -12,13 +12,13 @@ nsv        =  2
 /
 
 &DOMAIN
-itot       =  $Nh
-jtot       =  $Nh
+itot       =  {{Nh | int}}
+jtot       =  {{Nh | int}}
 kmax       =  126
 
 
-xsize      =  $extent
-ysize      =  $extent
+xsize      =  {{extent}}
+ysize      =  {{extent}}
 
 xlat       =  18.0
 xlon       =  298.5
@@ -27,7 +27,7 @@ xtime      =  0.0
 /
 
 &PHYSICS
-z0         =  $z0
+z0         =  {{z0}}
 ustin      =  0.32
 ps         =  101540.00
 thls       =  298.5
@@ -61,12 +61,12 @@ iadv_sv    =  7
 /
 &NAMMICROPHYSICS
 imicro     = 2
-Nc_0       = $Nc_0
-l_sb       = BOOLEAN$l_sb
+Nc_0       = {{Nc_0}}
+l_sb       = {{'.true.' if l_sb else '.false.'}}
 /
 &NAMSUBGRID
-cf = $cf
-Prandtl = $Prandtl
+cf = {{cf}}
+Prandtl = {{Prandtl}}
 /
 
 &NAMBULKMICROSTAT

@@ -6,6 +6,7 @@ import easyvvuq as uq
 import chaospy as cp
 import matplotlib.pyplot as plt
 from easyvvuq.decoders.json import JSONDecoder
+from easyvvuq.encoders.jinja_encoder import JinjaEncoder
 
 # Trying DALES with EasyVVUQ
 # based on EasyVVUQ gauss tutorial
@@ -183,8 +184,12 @@ if args.prepare:
     # 3. Wrap Application
     #    - Define a new application (we'll call it 'gauss'), and the encoding/decoding elements it needs
     #    - Also requires a collation element - this will be responsible for aggregating the results
-    encoder = uq.encoders.GenericEncoder(template_fname=template,
-                                     target_filename=input_filename)
+
+    #encoder = uq.encoders.GenericEncoder(template_fname=template,
+    #                                 target_filename=input_filename)
+    encoder = JinjaEncoder(template_fname=template,
+                           target_filename=input_filename)
+    
     decoder = uq.decoders.SimpleCSV(
         target_filename=out_file,
         output_columns=output_columns,
@@ -282,29 +287,29 @@ if args.analyze:
 
 
 
-    # print(f"sampler: {args.sampler}, order: {args.order}")
-    # print('         --- Varied input parameters ---')
-    # print("  param    default      unit     distribution")
-    # for k in vary.keys():
-    #     print("%8s %9.3g %9s  %s"%(k, params[k]['default'], unit.get(k, ''), str(vary[k])))
-    # print()
+    print(f"sampler: {args.sampler}, order: {args.order}")
+    print('         --- Varied input parameters ---')
+    print("  param    default      unit     distribution")
+    for k in vary.keys():
+        print("%8s %9.3g %9s  %s"%(k, params[k]['default'], unit.get(k, ''), str(vary[k])))
+    print()
 
-    # print('         --- Output ---')
-    # var = list(vary.keys())
+    print('         --- Output ---')
+    var = list(vary.keys())
 
-    # print("                                            Sobol indices")
-    # print("       QOI      mean       std      unit  ", end='')
-    # for v in var:
-    #     print('%9s'%v, end=' ')
-    # print()
+    print("                                            Sobol indices")
+    print("       QOI      mean       std      unit  ", end='')
+    for v in var:
+        print('%9s'%v, end=' ')
+    print()
 
-    # for qoi in output_columns:
-    #     print("%10s"%qoi, end=' ')
-    #     print("% 9.3g % 9.3g"%(results['statistical_moments'][qoi]['mean'] * scale.get(qoi,1), results['statistical_moments'][qoi]['std'] * scale.get(qoi,1)), end=' ')
-    #     print("%9s"%unit[qoi], end='  ')
-    #     for v in var:
-    #         print('%9.3g'%results['sobols_first'][qoi][v], end=' ')
-    #     print()
+    for qoi in output_columns:
+        print("%10s"%qoi, end=' ')
+        print("% 9.3g % 9.3g"%(results['statistical_moments'][qoi]['mean'] * scale.get(qoi,1), results['statistical_moments'][qoi]['std'] * scale.get(qoi,1)), end=' ')
+        print("%9s"%unit[qoi], end='  ')
+        for v in var:
+            print('%9.3g'%results['sobols_first'][qoi][v], end=' ')
+        print()
     
     
 
