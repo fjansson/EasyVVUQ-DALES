@@ -32,6 +32,7 @@ state_file_name="campaign_state.json"
 
 # Template input to substitute values into for each run
 template = f"{cwd}/namoptions.template"
+#template = f"{cwd}/namoptions.template.generic"
 #template = f"{cwd}/namoptions-1h-10x10.template"
 
 
@@ -65,57 +66,69 @@ params = {
     },
     "cf": {  # cf subgrid filter constant
         "type": "float",
-        "min": 1.0,     # min, max are just guesses 
-        "max": 4.0,  
+        "min": 1.0,     # min, max are just guesses
+        "max": 4.0,
         "default": 2.5,
     },
     "cn": {  # Subfilterscale parameter
         "type": "float",
-        "min": 0.5,     # min, max are just guesses 
-        "max": 1.0,  
+        "min": 0.5,     # min, max are just guesses
+        "max": 1.0,
         "default": 0.76,
     },
     "Rigc": {  # Critical Richardson number
         "type": "float",
-        "min": 0.1,     # min, max are just guesses 
-        "max": 1.0,  
+        "min": 0.1,     # min, max are just guesses
+        "max": 1.0,
         "default": 0.25,
     },
     "Prandtl": {  # Prandtl number, subgrid.
         "type": "float",
-        "min": 0.1,     # min, max are just guesses 
-        "max": 1.0,  
+        "min": 0.1,     # min, max are just guesses
+        "max": 1.0,
         "default": 1.0/3,
     },
-    "z0": {            # surface roughness  
+    "z0": {            # surface roughness
         "type": "float",
-        "min": 1e-4,     # min, max are just guesses 
-        "max": 1.0,  
+        "min": 1e-4,     # min, max are just guesses
+        "max": 1.0,
         "default": 1.6e-4,
     },
-    "l_sb": { # flag for microphysics scheme: false - KK00 Khairoutdinov and Kogan, 2000              
+    "l_sb": { # flag for microphysics scheme: false - KK00 Khairoutdinov and Kogan, 2000
         "type": "integer",                 #   true - SB   Seifert and Beheng, 2001, 2006, Default
-        "min" : 0,  
-        "max" : 1,   # converted to Fortran .true., .false. in prep.sh 
+        "min" : 0,
+        "max" : 1,
         "default": 1
     },
     "Nh" : {
         "type": "integer",   # number of grid points in the horizontal directions - itot, jtot
-        "min" : 3,  
-        "max" : 1024,   
+        "min" : 3,
+        "max" : 1024,
         "default" : 10
     },
     "extent": {          # Horizontal domain size in x, y  - xsize, ysize. unit: m
         "type": "float",
-        "min": 1,     
-        "max": 1000000,  
+        "min": 1,
+        "max": 1000000,
         "default": 1000,
     },
     "seed":{
         "type": "integer",   # random seed
-        "min" : 1,  
-        "max" : 1000000,   
+        "min" : 1,
+        "max" : 1000000,
         "default" : 43
+    },
+    "nprocx":{
+        "type": "integer",
+        "min" : 1,
+        "max" : 1000,
+        "default" : 1
+    },
+    "nprocy":{
+        "type": "integer",
+        "min" : 1,
+        "max" : 1000,
+        "default" : 1
     },
 }
 
@@ -128,10 +141,10 @@ vary = {
 #    "Rigc"    : cp.Uniform(0.1, 0.4),
 #    "Prandtl" : cp.Uniform(0.2, 0.4),
 #    "z0"      : cp.Uniform(1e-4, 2e-4),
-#    "l_sb"    :  cp.DiscreteUniform(0, 1),
+    "l_sb"    :  cp.DiscreteUniform(0, 1),
 #    "Nh"      : cp.DiscreteUniform(10, 20),
 #    "extent"  : cp.Uniform(1000, 2000),
-    "seed"    : cp.Uniform(1,    2000),    
+#    "seed"    : cp.DiscreteUniform(1, 2000),
 }
 
 
@@ -160,10 +173,20 @@ scale={
     'extent' : .001,  # convert m to km
 }
 
+# different polynomial order in different dimensions
+# use to avoid repeating integer parameters with small range
+order = [args.order] * len(vary)
+for i,k in enumerate(vary):
+    #print(i, k, params[k])
+    if (params[k]["type"] == "integer"):
+        max_order = (params[k]["max"] - params[k]["min"])
+        order[i] = min(order[i],max_order)
+print(f'Orders: {order} (only for SC sampler)')
 
 # 4. Specify Sampler
 if args.sampler=='sc':
-    my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=args.order,
+    # sc sampler can have differet orders for different dimensions
+    my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=order,
                                        quadrature_rule="C")
 elif args.sampler=='pce':
     my_sampler = uq.sampling.PCESampler(vary=vary, polynomial_order=args.order,
@@ -189,8 +212,8 @@ if args.prepare:
     #    - Define a new application (we'll call it 'gauss'), and the encoding/decoding elements it needs
     #    - Also requires a collation element - this will be responsible for aggregating the results
 
-    #encoder = uq.encoders.GenericEncoder(template_fname=template,
-    #                                 target_filename=input_filename)
+#    encoder = uq.encoders.GenericEncoder(template_fname=template,
+#                                         target_filename=input_filename)
     encoder = JinjaEncoder(template_fname=template,
                            target_filename=input_filename)
     

@@ -5,4 +5,4 @@
 # echo prep.sh: ln -s $1/* ./
 ln -s $1/* ./
 
-sed -i namoptions.001 -e "s/BOOLEAN1/.true./;s/BOOLEAN0/.false./"
+# sed -i namoptions.001 -e "s/BOOLEAN1/.true./;s/BOOLEAN0/.false./"

@@ -9,6 +9,8 @@ irandom    =  {{seed | int}}
 randthl    =  0.1
 randqt     =  2.5e-5
 nsv        =  2
+nprocx     = {{nprocx | int}}
+nprocy     = {{nprocy | int}}
 /
 
 &DOMAIN
