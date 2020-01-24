@@ -13,31 +13,21 @@ from easyvvuq.encoders.jinja_encoder import JinjaEncoder
 # Fredrik Jansson Nov. 2019
 
 # 0. Setup some variables describing app to be run
-#
-#    gauss.py is in current directory and takes one input file
-#    and writes to 'output.csv'.
+
 #dales_exe = "~/dales/build/src/dales4"
-dales_exe = "~/code/official-dales/build/src/dales4"
+#dales_exe = "~/code/official-dales/build/src/dales4"
 
 cwd = os.getcwd()
 input_filename = 'namoptions.001'
-cmd = f"{dales_exe} {input_filename}"
-#out_file = "results.json"
 out_file = "results.csv"
-
 postproc="postproc.py"
-#work_dir="/export/scratch3/jansson/uq-work/"
-work_dir="/tmp"
 state_file_name="campaign_state.json"
 
 # Template input to substitute values into for each run
-template = f"{cwd}/namoptions.template"
-#template = f"{cwd}/namoptions.template.generic"
-#template = f"{cwd}/namoptions-1h-10x10.template"
-
 
 # Parameter handling 
-parser = argparse.ArgumentParser(description="EasyVVUQ for DALES")
+parser = argparse.ArgumentParser(description="EasyVVUQ for DALES",
+                                 fromfile_prefix_chars='@')
 parser.add_argument("--prepare",  action="store_true", default=False,
                     help="Prepare run directories")
 parser.add_argument("--run",  action="store_true", default=False,
@@ -52,9 +42,13 @@ parser.add_argument("--num_samples",  default="10", type=int,
                     help="number of samples for the random sampler.")
 parser.add_argument("--order",  default="2", type=int,
                     help="Sampler order")
-
+parser.add_argument("--model",  default="dales4", help="Model executable file")
+parser.add_argument("--workdir", default="/tmp", help="Model working directory base")
+parser.add_argument("--template", default="namoptions.template", help="Template for model input file")
 
 args = parser.parse_args()
+template = os.path.abspath(args.template)
+
 
 # 2. Parameter space definition
 params = {
@@ -201,7 +195,7 @@ else:
     
 if args.prepare:
     # 1. Create campaign
-    my_campaign = uq.Campaign(name='dales', work_dir=work_dir, db_type='json')
+    my_campaign = uq.Campaign(name='dales', work_dir=args.workdir, db_type='json')
     # json database can contain vector-valued QoI's.
     # the default sql database cannot, at the moment.
 
@@ -209,7 +203,7 @@ if args.prepare:
     # all run directories created under workdir
 
     # 3. Wrap Application
-    #    - Define a new application (we'll call it 'gauss'), and the encoding/decoding elements it needs
+    #    - Define a new application, and the encoding/decoding elements it needs
     #    - Also requires a collation element - this will be responsible for aggregating the results
 
 #    encoder = uq.encoders.GenericEncoder(template_fname=template,
@@ -262,24 +256,24 @@ if args.prepare:
 ################################################
 
 if args.run:
-    my_campaign = uq.Campaign(state_file=state_file_name, work_dir=work_dir)
+    my_campaign = uq.Campaign(state_file=state_file_name, work_dir=args.workdir)
 
     # run sequentially
     # my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(cmd))
     
     if args.parallel:
-        pcmd = f"ls -d {my_campaign.campaign_dir}/runs/Run_* | parallel -j {args.parallel} 'cd {{}} ; {dales_exe} namoptions.001 > output.txt ;  cd .. '"
+        pcmd = f"ls -d {my_campaign.campaign_dir}/runs/Run_* | parallel -j {args.parallel} 'cd {{}} ; {args.model} namoptions.001 > output.txt ;  cd .. '"
         print ('Parallel run command', pcmd)
         subprocess.call(pcmd, shell=True)
     else:
-        my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(f"{dales_exe} namoptions.001 > output.txt"))
+        my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(f"{args.model} namoptions.001 > output.txt"))
         
     my_campaign.save_state(state_file_name)
 
 ################################################
 
 if args.analyze:
-    my_campaign = uq.Campaign(state_file=state_file_name, work_dir=work_dir)
+    my_campaign = uq.Campaign(state_file=state_file_name, work_dir=args.workdir)
 
     my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(postproc, interpret='python3'))
 
