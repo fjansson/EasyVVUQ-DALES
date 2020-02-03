@@ -7,6 +7,7 @@ import chaospy as cp
 import matplotlib.pyplot as plt
 from easyvvuq.decoders.json import JSONDecoder
 from easyvvuq.encoders.jinja_encoder import JinjaEncoder
+import fabsim3_cmd_api as fab
 
 # Trying DALES with EasyVVUQ
 # based on EasyVVUQ gauss tutorial
@@ -34,6 +35,8 @@ parser.add_argument("--run",  action="store_true", default=False,
                     help="Run model, sequentially")
 parser.add_argument("--parallel", type=int, default=0,
                     help="use parallel command to run model with N threads")
+parser.add_argument("--fab", action="store_true", default=False,
+                    help="use Fabsim to run model")
 parser.add_argument("--analyze",  action="store_true", default=False,
                     help="Analyze results")
 parser.add_argument("--sampler",  default="sc", choices=['sc', 'pce', 'random'],
@@ -265,6 +268,8 @@ if args.run:
         pcmd = f"ls -d {my_campaign.campaign_dir}/runs/Run_* | parallel -j {args.parallel} 'cd {{}} ; {args.model} namoptions.001 > output.txt ;  cd .. '"
         print ('Parallel run command', pcmd)
         subprocess.call(pcmd, shell=True)
+    elif args.fab:
+        fab.run_uq_ensemble(my_campaign.campaign_dir, script_name='dales', machine='eagle_vecma')
     else:
         my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(f"{args.model} namoptions.001 > output.txt"))
         
