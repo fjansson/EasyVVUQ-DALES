@@ -2,7 +2,7 @@
 iexpnr     =  001
 lwarmstart =  .false.
 startfile  =  'initd001h00mx000y000.001'
-runtime    =  3600
+runtime    =  86400
 trestart   =  -1
 ladaptive  =  .true.
 irandom    =  {{seed | int}}
@@ -31,8 +31,8 @@ xtime      =  0.0
 &PHYSICS
 z0         =  {{z0}}
 ustin      =  0.32
-ps         =  101540.00
-thls       =  298.5
+ps         =  {{ps}}
+thls       =  {{thls}}
 
 
 lmoist     =  .true.
@@ -43,7 +43,7 @@ lcoriol    =  .true.
 lmomsubs   =  .false.
 /
 &NAMSURFACE
-thls  =  298.5
+thls  =  {{thls}}
 z0mav =  1.6e-4
 z0hav =  3.2e-5
 /

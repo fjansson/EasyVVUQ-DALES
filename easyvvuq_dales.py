@@ -50,6 +50,7 @@ parser.add_argument("--template", default="namoptions.template", help="Template 
 args = parser.parse_args()
 template = os.path.abspath(args.template)
 
+print ("workdir:",args.workdir)
 
 # 2. Parameter space definition
 params = {
@@ -99,13 +100,13 @@ params = {
         "type": "integer",   # number of grid points in the horizontal directions - itot, jtot
         "min" : 3,
         "max" : 1024,
-        "default" : 10
+        "default" : 128
     },
     "extent": {          # Horizontal domain size in x, y  - xsize, ysize. unit: m
         "type": "float",
         "min": 1,
         "max": 1000000,
-        "default": 1000,
+        "default": 12800,
     },
     "seed":{
         "type": "integer",   # random seed
@@ -125,21 +126,59 @@ params = {
         "max" : 1000,
         "default" : 1
     },
+    "poissondigits": {   # precision of the iterative Poisson solver. tolerance=10**-poissondigits
+        "type": "float", # only useful if the template contains a &solver section
+        "min": 2,
+        "max": 16,
+        "default": 15,
+    },
+    "ps": { # surface pressure, Pa
+        "type": "float",
+        "min": 90000,
+        "max": 110000,
+        "default": 101540.00,
+    },
+    "thls": { # surface temperature, K
+        "type": "float",
+        "min": 270,
+        "max": 320,
+        "default": 298.5,
+    },
+    
 }
 
-vary = {
+vary = {  # Physics
+>>>>>>> 9fbe2f5b46e7a03b3cfe50a726e3db689c1bca5a
     "Nc_0"    : cp.Uniform(50e6, 100e6),
     "cf"      : cp.Uniform(2.4, 2.6),
 #    "cn"      : cp.Uniform(0.5, 0.9),
 #    "Rigc"    : cp.Uniform(0.1, 0.4),
-#    "Prandtl" : cp.Uniform(0.2, 0.4),
+    "Prandtl" : cp.Uniform(0.2, 0.4),
 #    "z0"      : cp.Uniform(1e-4, 2e-4),
 #    "l_sb"    :  cp.DiscreteUniform(0, 1),
 #    "Nh"      : cp.DiscreteUniform(10, 20),
 #    "extent"  : cp.Uniform(1000, 2000),
-#    "seed"    : cp.DiscreteUniform(1, 2000),
+    "seed"    : cp.DiscreteUniform(1, 2000),
 }
 
+vary_choices = {  # resolution, extent, microphysics choice, 
+#    "Nc_0"    : cp.Uniform(50e6, 100e6),
+#    "cf"      : cp.Uniform(2.4, 2.6),
+#    "cn"      : cp.Uniform(0.5, 0.9),
+#    "Rigc"    : cp.Uniform(0.1, 0.4),
+#    "Prandtl" : cp.Uniform(0.2, 0.4),
+#    "z0"      : cp.Uniform(1e-4, 2e-4),
+    "l_sb"    : cp.DiscreteUniform(0, 1),
+    "Nh"      : cp.DiscreteUniform(32, 128),
+    "extent"  : cp.Uniform(3200, 12800),
+    "seed"    : cp.DiscreteUniform(1, 2000),
+}
+
+# note use .poisson template which has iterative solver
+vary_poisson = {
+    "seed"    : cp.DiscreteUniform(1, 2000),
+    "poissondigits": cp.Uniform(2,15)
+}
 
 
 output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we', 'walltime']
@@ -158,6 +197,8 @@ unit={
      'Nc_0'  :'m$^{-3}$',
      'extent':'km',
      'walltime':'s',
+     'ps'      :'Pa',
+     'thls'    :'K',
 }
 
 scale={ 
