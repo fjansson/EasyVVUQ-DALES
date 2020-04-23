@@ -148,7 +148,6 @@ params = {
 }
 
 vary = {  # Physics
->>>>>>> 9fbe2f5b46e7a03b3cfe50a726e3db689c1bca5a
     "Nc_0"    : cp.Uniform(50e6, 100e6),
     "cf"      : cp.Uniform(2.4, 2.6),
 #    "cn"      : cp.Uniform(0.5, 0.9),
