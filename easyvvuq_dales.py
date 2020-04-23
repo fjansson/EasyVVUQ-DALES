@@ -9,22 +9,20 @@ from easyvvuq.decoders.json import JSONDecoder
 from easyvvuq.encoders.jinja_encoder import JinjaEncoder
 import fabsim3_cmd_api as fab
 
-# Trying DALES with EasyVVUQ
+# Analyzing DALES with EasyVVUQ
 # based on EasyVVUQ gauss tutorial
-# Fredrik Jansson Nov. 2019
+# Fredrik Jansson, CWI, 2019-2020
 
 # 0. Setup some variables describing app to be run
 
-#dales_exe = "~/dales/build/src/dales4"
-#dales_exe = "~/code/official-dales/build/src/dales4"
-
 cwd = os.getcwd()
 input_filename = 'namoptions.001'
-out_file = "results.csv"
+#out_file = "results.json"; use_csv_decoder=False
+out_file = "results.csv"; use_csv_decoder=True
+
 postproc="postproc.py"
 state_file_name="campaign_state.json"
 
-# Template input to substitute values into for each run
 
 # Parameter handling 
 parser = argparse.ArgumentParser(description="EasyVVUQ for DALES",
@@ -92,7 +90,7 @@ params = {
         "default": 1.6e-4,
     },
     "l_sb": { # flag for microphysics scheme: false - KK00 Khairoutdinov and Kogan, 2000
-        "type": "integer",                 #   true - SB   Seifert and Beheng, 2001, 2006, Default
+        "type": "float",                 #   true - SB   Seifert and Beheng, 2001, 2006, Default
         "min" : 0,
         "max" : 1,
         "default": 1
@@ -129,16 +127,14 @@ params = {
     },
 }
 
-# can't have extra fields in params dict.
-
 vary = {
     "Nc_0"    : cp.Uniform(50e6, 100e6),
-#    "cf"      : cp.Uniform(2.4, 2.6),
+    "cf"      : cp.Uniform(2.4, 2.6),
 #    "cn"      : cp.Uniform(0.5, 0.9),
 #    "Rigc"    : cp.Uniform(0.1, 0.4),
 #    "Prandtl" : cp.Uniform(0.2, 0.4),
 #    "z0"      : cp.Uniform(1e-4, 2e-4),
-    "l_sb"    :  cp.DiscreteUniform(0, 1),
+#    "l_sb"    :  cp.DiscreteUniform(0, 1),
 #    "Nh"      : cp.DiscreteUniform(10, 20),
 #    "extent"  : cp.Uniform(1000, 2000),
 #    "seed"    : cp.DiscreteUniform(1, 2000),
@@ -146,7 +142,7 @@ vary = {
 
 
 
-output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we', 'walltime'] #, 'qt']
+output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we', 'walltime']
 unit={
      'cfrac' :'',
      'lwp'   :'g/m$^2$',
@@ -186,8 +182,9 @@ if args.sampler=='sc':
     my_sampler = uq.sampling.SCSampler(vary=vary, polynomial_order=order,
                                        quadrature_rule="C")
 elif args.sampler=='pce':
-    my_sampler = uq.sampling.PCESampler(vary=vary, polynomial_order=args.order,
-                                        quadrature_rule="G")
+    print('order argument',args.order)
+    my_sampler = uq.sampling.PCESampler(vary=vary, polynomial_order=args.order)
+                                        # quadrature_rule="G")
 elif args.sampler=='random':
     my_sampler = uq.sampling.RandomSampler(vary=vary)
 else:
@@ -198,12 +195,12 @@ else:
     
 if args.prepare:
     # 1. Create campaign
-    my_campaign = uq.Campaign(name='dales', work_dir=args.workdir, db_type='json')
-    # json database can contain vector-valued QoI's.
-    # the default sql database cannot, at the moment.
+    my_campaign = uq.Campaign(name='dales',  work_dir=args.workdir)
 
+    # all run directories, and the database are created under workdir
     
-    # all run directories created under workdir
+    # json database can contain vector-valued QoI's.  - gone since 22.4.2020
+    # the default sql database cannot, at the moment.
 
     # 3. Wrap Application
     #    - Define a new application, and the encoding/decoding elements it needs
@@ -213,16 +210,16 @@ if args.prepare:
 #                                         target_filename=input_filename)
     encoder = JinjaEncoder(template_fname=template,
                            target_filename=input_filename)
-    
-    decoder = uq.decoders.SimpleCSV(
-        target_filename=out_file,
-        output_columns=output_columns,
-        header=0)
-
-#    decoder = JSONDecoder(
-#        target_filename=out_file,
-#        output_columns=output_columns)
-
+    if use_csv_decoder:    
+        decoder = uq.decoders.SimpleCSV(
+            target_filename=out_file,
+            output_columns=output_columns,
+            header=0)
+    else:
+        decoder = JSONDecoder(
+            target_filename=out_file,
+            output_columns=output_columns)
+        
     collater = uq.collate.AggregateSamples(average=False)
 
     my_campaign.add_app(name="dales",
@@ -234,7 +231,9 @@ if args.prepare:
 
     my_campaign.set_sampler(my_sampler)
 
-    my_campaign.verify_all_runs = False # to prevent errors on integer quantities
+    #my_campaign.verify_all_runs = False
+    # to prevent validation errors on integer quantities
+    # better work-around: declare the parameters with float data type even if they are integer-valued
     
     # 5. Get run parameters
     if args.sampler=='random':
@@ -287,7 +286,10 @@ if args.analyze:
 
     data = my_campaign.get_collation_result()
     print(data)
-        
+#    print(type(data['qt'][0]))
+#    print(data['qt'][0])
+
+    
     # 9. Run Analysis
     if args.sampler == 'random':
         analysis = uq.analysis.BasicStats(qoi_cols=output_columns)
@@ -342,10 +344,7 @@ if args.analyze:
     # print(analysis.get_sample_array('cfrac'))  # just the sample values, no coordinates.
     # print(my_campaign.get_collation_result()) # a Pandas dataframe
 
-
-    print(data)
-    #print(data['qt'])
-    scalar_outputs = output_columns[:-1]
+    scalar_outputs = output_columns # [:-1]
     #plt.plot(data['Nc_0'], data['prec'], 'o')
     params = vary.keys()
     fig, ax = plt.subplots(nrows=len(scalar_outputs), ncols=len(params),
