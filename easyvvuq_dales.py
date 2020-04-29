@@ -91,7 +91,7 @@ params = {
         "default": 1.6e-4,
     },
     "l_sb": { # flag for microphysics scheme: false - KK00 Khairoutdinov and Kogan, 2000
-        "type": "float",                 #   true - SB   Seifert and Beheng, 2001, 2006, Default
+        "type": "float",                   #   true - SB   Seifert and Beheng, 2001, 2006, Default
         "min" : 0,
         "max" : 1,
         "default": 1
@@ -100,9 +100,9 @@ params = {
         "type": "integer",   # number of grid points in the horizontal directions - itot, jtot
         "min" : 3,
         "max" : 1024,
-        "default" : 128
+        "default" : 112   # 112=7*16 - fits Eagle's 28 cores/node
     },
-    "extent": {          # Horizontal domain size in x, y  - xsize, ysize. unit: m
+    "extent": {           # Horizontal domain size in x, y  - xsize, ysize. unit: m
         "type": "float",
         "min": 1,
         "max": 1000000,
@@ -118,17 +118,17 @@ params = {
         "type": "integer",
         "min" : 1,
         "max" : 1000,
-        "default" : 1
+        "default" : 4
     },
     "nprocy":{
         "type": "integer",
         "min" : 1,
         "max" : 1000,
-        "default" : 1
+        "default" : 7
     },
     "poissondigits": {   # precision of the iterative Poisson solver. tolerance=10**-poissondigits
         "type": "float", # only useful if the template contains a &solver section
-        "min": 2,
+        "min": 1,
         "max": 16,
         "default": 15,
     },
@@ -175,9 +175,11 @@ vary_choices = {  # resolution, extent, microphysics choice,
 
 # note use .poisson template which has iterative solver
 vary_poisson = {
-    "seed"    : cp.DiscreteUniform(1, 2000),
-    "poissondigits": cp.Uniform(2,15)
+#    "seed"    : cp.DiscreteUniform(1, 2000),
+    "poissondigits": cp.Uniform(1,15)
 }
+
+vary=vary_poisson
 
 
 output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we', 'walltime']
@@ -319,6 +321,10 @@ if args.run:
 if args.analyze:
     my_campaign = uq.Campaign(state_file=state_file_name, work_dir=args.workdir)
 
+    if args.fab:
+        print("Fetching results with FabSim:")
+        fab.get_uq_samples(my_campaign.campaign_dir, machine='eagle_vecma')
+        
     my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(postproc, interpret='python3'))
 
     # 8. Collate output
