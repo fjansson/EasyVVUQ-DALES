@@ -9,17 +9,17 @@ irandom    =  {{seed | int}}
 randthl    =  0.1
 randqt     =  2.5e-5
 nsv        =  2
-nprocx     = {{nprocx | int}}
-nprocy     = {{nprocy | int}}
+nprocx     = 2
+nprocy     = 8
 /
 
 &DOMAIN
-itot       =  {{Nh | int}}
-jtot       =  {{Nh | int}}
+itot       =  128
+jtot       =  128
 kmax       =  126
 
-xsize      =  {{extent}}
-ysize      =  {{extent}}
+xsize      =  12800
+ysize      =  12800
 
 xlat       =  18.0
 xlon       =  298.5

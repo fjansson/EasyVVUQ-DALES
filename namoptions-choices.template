@@ -53,11 +53,11 @@ lqlnr      =  .false.
 cu         =  -5.
 cv         =  -4.
 
-iadv_mom   =  2
-iadv_tke   =  2
-iadv_thl   =  2
-iadv_qt    =  2
-iadv_sv    =  7, 7
+iadv_mom   =  {{'2' if iadv==0 else '5'}} 
+iadv_tke   =  {{'2' if iadv==0 else '5'}} 
+iadv_thl   =  {{'2' if iadv==0 else '5'}} 
+iadv_qt    =  {{'2' if iadv==0 else '5'}} 
+iadv_sv    =  {{['2', '5', '7'][iadv_sv]}}, {{['2', '5', '7'][iadv_sv]}}
 /
 &NAMMICROPHYSICS
 imicro     = 2

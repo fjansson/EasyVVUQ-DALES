@@ -9,7 +9,7 @@ import numpy
 import json
 from netCDF4 import Dataset
 import subprocess
-
+import glob
 
 # https://stackoverflow.com/a/136280/1333273
 def tail(f, n):
@@ -18,8 +18,23 @@ def tail(f, n):
     return lines
 
 
+# select time index range for averaging.
+# last 4 h or last half of simulation if total time < 8h
+def sel_range(time):
+    l = len(gcfrac)
+    tlast = time[-1]
+    if tlast > 8*3600:
+        imin = numpy.searchsorted(time, tlast-4*3600)
+    else:
+        imin = l//2   # average over last half of run
+    return imin, l
+
+
+
+
 d = Dataset("tmser.001.nc", 'r')
 
+time1 = d.variables['time'][:]
 gcfrac   = d.variables['cfrac'][:]     # global cloud fraction
 lwp_bar = d.variables['lwp_bar'][:]
 zb = d.variables['zb'][:]
@@ -28,18 +43,20 @@ wq = d.variables['wq'][:]
 wtheta = d.variables['wtheta'][:]
 we = d.variables['we'][:]
 
-# compute means over last half of simulation
-l = len(gcfrac)
-gcfrac_avg = numpy.mean(gcfrac[l//2:l])
-lwp_bar_avg = numpy.mean(lwp_bar[l//2:l])
-zb_avg = numpy.mean(zb[l//2:l])
-zi_avg = numpy.mean(zi[l//2:l])
-wq_avg = numpy.mean(wq[l//2:l])
-wtheta_avg = numpy.mean(wtheta[l//2:l])
-we_avg = numpy.mean(we[l//2:l])
+imin, l = sel_range(time1)
+print('Averaging from %.1f to %.1f h'%(time1[imin]/3600, time1[-1]/3600))
+
+gcfrac_avg = numpy.mean(gcfrac[imin:l])
+lwp_bar_avg = numpy.mean(lwp_bar[imin:l])
+zb_avg = numpy.mean(zb[imin:l])
+zi_avg = numpy.mean(zi[imin:l])
+wq_avg = numpy.mean(wq[imin:l])
+wtheta_avg = numpy.mean(wtheta[imin:l])
+we_avg = numpy.mean(we[imin:l])
 
 p = Dataset("profiles.001.nc", 'r')
 # precipitation flux at lowest level
+time2   = p.variables["time"][:]  
 prec    = p.variables["precmn"][:,0]  
 qr      = p.variables["sv002"][:,:]
 ql      = p.variables["ql"][:,:]
@@ -59,28 +76,35 @@ ldzf = len(dzf)
 rwp = numpy.sum(qr[:,0:ldzf] * rhof[:,0:ldzf] * dzf[:], axis=1)  # rwp over time
 #print ('rwp', rwp)
 
-l = len(prec)
-prec_avg = numpy.mean(prec[l//2:l])
-rwp_avg = numpy.mean(rwp[l//2:l])
+imin, l = sel_range(time2)
+print('Averaging from %.1f to %.1f h'%(time2[imin]/3600, time2[-1]/3600))
 
-qr_avg     = numpy.mean(qr[l//2:l], axis=0)
-ql_avg     = numpy.mean(ql[l//2:l], axis=0)
-qt_avg     = numpy.mean(qt[l//2:l], axis=0)
-thl_avg    = numpy.mean(thl[l//2:l], axis=0)
-u_avg      = numpy.mean(u[l//2:l], axis=0)
-v_avg      = numpy.mean(v[l//2:l], axis=0)
-zcfrac_avg = numpy.mean(zcfrac[l//2:l], axis=0)
 
+prec_avg = numpy.mean(prec[imin:l])
+rwp_avg = numpy.mean(rwp[imin:l])
+
+qr_avg     = numpy.mean(qr[imin:l], axis=0)
+ql_avg     = numpy.mean(ql[imin:l], axis=0)
+qt_avg     = numpy.mean(qt[imin:l], axis=0)
+thl_avg    = numpy.mean(thl[imin:l], axis=0)
+u_avg      = numpy.mean(u[imin:l], axis=0)
+v_avg      = numpy.mean(v[imin:l], axis=0)
+zcfrac_avg = numpy.mean(zcfrac[imin:l], axis=0)
 
 # get wall clock time from output file
-walltime = -1
-try:
-    t = tail('output.txt', 1)[0]
-    walltime = float(t.split(b'=')[-1])
-except:
-    pass
-
-# print ('tail', t, 'walltime', walltime)
+def get_walltime(filename):
+    try:
+        t = tail(filename, 1)[0]
+        return float(t.split(b'=')[-1])
+    except:
+        return None
+    
+# extract wallclock time from output text file.
+# try several possibilities for the output file name
+out_files = glob.glob("output.txt")
+out_files.extend(glob.glob("*.output"))
+walltime = get_walltime(out_files[0])
+print('output file:', out_files[0], 'walltime:', walltime)
 
 with open('results.csv', 'wt') as out_file:
     # needs one row of headers, then row(s) of data
@@ -90,7 +114,7 @@ with open('results.csv', 'wt') as out_file:
 
 
 
-# did this anticipating json output  (but there is no decoder for that)
+# JSON output - can also include vertical profiles
 results = {'cfrac' : float(gcfrac_avg),
            'lwp' : float(lwp_bar_avg),
            'rwp' : float(rwp_avg),

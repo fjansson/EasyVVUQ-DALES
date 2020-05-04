@@ -42,8 +42,8 @@ lmomsubs   =  .false.
 /
 &NAMSURFACE
 thls  =  {{thls}}
-z0mav =  1.6e-4
-z0hav =  3.2e-5
+!z0mav =  1.6e-4   ! these override z0
+!z0hav =  3.2e-5   !
 /
 
 
