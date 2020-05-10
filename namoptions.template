@@ -65,8 +65,10 @@ Nc_0       = {{Nc_0}}
 l_sb       = {{'.true.' if l_sb else '.false.'}}
 /
 &NAMSUBGRID
-cf = {{cf}}
+cf      = {{cf}}
 Prandtl = {{Prandtl}}
+Rigc    = {{Rigc}}
+cn      = {{cn}}
 /
 
 &NAMBULKMICROSTAT

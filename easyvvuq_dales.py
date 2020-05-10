@@ -34,6 +34,8 @@ parser.add_argument("--parallel", type=int, default=0,
                     help="use parallel command to run model with N threads")
 parser.add_argument("--fab", action="store_true", default=False,
                     help="use Fabsim to run model")
+parser.add_argument("--fetch",  action="store_true", default=False,
+                    help="Fetch fabsim results")
 parser.add_argument("--analyze",  action="store_true", default=False,
                     help="Analyze results")
 parser.add_argument("--sampler",  default="sc", choices=['sc', 'pce', 'random'],
@@ -48,6 +50,7 @@ parser.add_argument("--template", default="namoptions.template", help="Template 
 parser.add_argument("--campaign", default="campaign_state.json", help="Campaign state file name")
 parser.add_argument("--replicas", default="1", type=int, help="Number of replicas")
 parser.add_argument("--experiment", default="physics", help="experiment setup - chooses set of parameters to vary")
+parser.add_argument("--plot", default=None, type=str, help="File name for plot")
 
 args = parser.parse_args()
 template = os.path.abspath(args.template)
@@ -71,13 +74,13 @@ params = {
     },
     "cn": {  # Subfilterscale parameter
         "type": "float",
-        "min": 0.5,     # min, max are just guesses
+        "min": 0.4,     # min, max are just guesses
         "max": 1.0,
         "default": 0.76,
     },
     "Rigc": {  # Critical Richardson number
         "type": "float",
-        "min": 0.1,     # min, max are just guesses
+        "min": 0.09,     # min, max are just guesses
         "max": 1.0,
         "default": 0.25,
     },
@@ -162,18 +165,30 @@ vary_physics = {  # Physics
 #    "l_sb"    :  cp.DiscreteUniform(0, 1),
 }
 
-vary_physics_z0 = {  # Physics 
+vary_physics_z0_v1 = {  # Physics - with this wide range of z0 [1e-4,1e-1], it dominates the uncertainty 
     "seed"    : cp.DiscreteUniform(1, 2000),
     "Nc_0"    : cp.Uniform(50e6, 100e6),
     "thls"    : cp.Uniform(298, 299),
     "z0"      : cp.LogUniform(numpy.log(1e-4),numpy.log(1e-1))    # note: has effect if z0hav, z0mav are not in namelist
-#    "cf"      : cp.Uniform(2.4, 2.6),
 #    "cn"      : cp.Uniform(0.5, 0.9),
 #    "Rigc"    : cp.Uniform(0.1, 0.4),
 #    "Prandtl" : cp.Uniform(0.2, 0.4),
 #    "z0"      : cp.Uniform(1e-4, 2e-4),
 #    "l_sb"    :  cp.DiscreteUniform(0, 1),
+}
 
+vary_physics_z0 = {
+    "seed"    : cp.DiscreteUniform(1, 2000),
+    "Nc_0"    : cp.Uniform(50e6, 100e6),
+    "thls"    : cp.Uniform(298, 299),
+    "z0"      : cp.Uniform(1e-4, 2e-4),
+    }
+
+vary_subgrid = {
+    "seed"    : cp.DiscreteUniform(1, 2000),
+    "cn"      : cp.Uniform(0.5, 0.9),  # default 0.76         
+    "Rigc"    : cp.Uniform(0.1, 0.4),  # default 0.25
+    "Prandtl" : cp.Uniform(0.2, 0.4),  # default 1/3
 }
 
 vary_choices = {  # microphysics choice, advection scheme
@@ -200,7 +215,8 @@ experiment_options = {
     'physics'    : (vary_physics, (5, 5, 5)),         # physics without z0
     'poisson'    : (vary_poisson, (4, 6)),
     'test'       : (vary_test,    (2, 2)),
-    'choices'    : (vary_choices, (2,2,3,5))    # advection and microphysics schemes
+    'choices'    : (vary_choices, (2,2,3,5)),    # advection and microphysics schemes
+    'subgrid'    : (vary_subgrid, (2,2,2,2)),      
 }
 
 vary, order = experiment_options[args.experiment]
@@ -211,24 +227,54 @@ unit={
      'cfrac' :'',
      'lwp'   :'g/m$^2$',
      'rwp'   :'g/m$^2$',
-     'zb'    :'m',
-     'zi'    :'m',
+     'zb'    :'km',
+     'zi'    :'km',
      'prec'  :'W/m$^2$',
-     'wq'    :'kg/kg m/s',
+     'wq'    :'g/kg m/s',
      'wtheta':'K m/s',
      'we'    :'m/s',
 
      'z0'    :'m',
-     'Nc_0'  :'m$^{-3}$',
-     'walltime':'s',
+     'Nc_0'  :'cm$^{-3}$',
+     'walltime':'h',
      'ps'      :'Pa',
      'thls'    :'K',
 }
 
 scale={ 
-    'lwp'    : 1000,  # convert kg/m^2 to g/m^2
-    'rwp'    : 1000,  # convert kg/m^2 to g/m^2
+    'lwp'      : 1000,    # convert kg/m^2 to g/m^2
+    'rwp'      : 1000,    # convert kg/m^2 to g/m^2
+    'wq'       : 1000,    # convert kg/kg m/s to g/kg m/s
+    'zi'       : .001,    # convert m to km
+    'zb'       : .001,    # convert m to km
+    'Nc_0'     : 1e-6,    # convert m$^{-3}$, cm$^{-3}$, 
+    'walltime' : 1.0/3600 # convert seconds to hours
 }
+
+plot_labels = {
+    'wtheta'   : r'$w_{\theta}$',
+    'wq'       : '$w_q$',
+    'we'       : '$w_e$',
+    'walltime' : 'time',
+    'zi'       : '$z_i$',
+    'zb'       : '$z_b$',
+    'iadv'     : 'adv.',
+    'iadv_sv'  : 'rain adv.',
+    'seed'     : 'seed',
+    'l_sb'     : 'microphys.',
+    'rwp'      : 'RWP',
+    'lwp'      : 'LWP',
+    'cfrac'    : '$C$',
+    'prec'     : '$P_{srf}$',
+    'z0'       : '$z_0$',
+    'Nc_0'     : '$N_{c}$',
+    'thls'     : r'$\theta_{s}$',
+    'poissondigits' : '$d$',
+    'cn'       : '$c_N$',      # Heus2010 cites Deardorf1980 for the subgrid formulation
+    'Rigc'     : 'Ri$_c$',     # http://glossary.ametsoc.org/wiki/Bulk_richardson_number
+    'Prandtl'  : 'Pr',
+}
+
 
 # different polynomial order in different dimensions
 # use to avoid repeating integer parameters with small range
@@ -345,13 +391,18 @@ if args.run:
 
 ################################################
 
-if args.analyze:
+if args.fetch:    
     my_campaign = uq.Campaign(state_file=args.campaign, work_dir=args.workdir)
 
     if args.fab:
         print("Fetching results with FabSim:")
         fab.get_uq_samples(my_campaign.campaign_dir, machine='eagle_vecma')
-        
+
+    my_campaign.save_state(args.campaign)
+                
+if args.analyze:
+    my_campaign = uq.Campaign(state_file=args.campaign, work_dir=args.workdir)
+
     my_campaign.apply_for_each_run_dir(uq.actions.ExecuteLocal(postproc, interpret='python3'))
 
     # 8. Collate output
@@ -378,20 +429,6 @@ if args.analyze:
     my_campaign.apply_analysis(analysis)
     results = my_campaign.get_last_analysis()
 
-    print('Analysis: analysis.get_sample_array()')
-    print(analysis.get_sample_array('prec'))
-    print()
-    
-    if args.sampler == 'sc':  # multi-var Sobol indices are not available for PCE
-        for qoi in output_columns: 
-            print(qoi, results['statistical_moments'][qoi]['mean'], 
-                  results['statistical_moments'][qoi]['std'],
-                  'sobols:', results['sobols'][qoi],
-            ) #'sobols_first:', results['sobols_first'][qoi])
-
-
-
-
     print(f"sampler: {args.sampler}, order: {args.order}")
     print('         --- Varied input parameters ---')
     print("  param    default      unit     distribution")
@@ -402,46 +439,139 @@ if args.analyze:
     print('         --- Output ---')
     var = list(vary.keys())
 
-    print("                                                  Sobol indices")
-    print("       QOI      mean       std  std(%)     unit  ", end='')
+    latex = True
+    if latex:
+        sep=' &'
+        end=r' \\'
+        percent=r'\%'
+    else:
+        sep = ' '
+        end=''
+        percent='%'
+        
+    if latex:
+        print('\\begin{tabular}{lrrl*{%d}{r}}'%len(var))
+        print(r'\hline')
+
+    #print("                                                  Sobol indices")
+    print(f"       QOI  {sep}    mean {sep}std({percent}){sep}     unit", end='')
     for v in var:
-        print('%9s'%v, end=' ')
-    print()
-
+        if latex:
+            v = plot_labels.get(v, v)
+        print(sep, '%12s'%v, end='')
+    print(end)
+    if latex:
+        print(r'\hline')
+    
     for qoi in output_columns:
-        print("%10s"%qoi, end=' ')
-        print("% 9.3g % 9.3g % 6.1f"%(results['statistical_moments'][qoi]['mean'] * scale.get(qoi,1),
-                                      results['statistical_moments'][qoi]['std'] * scale.get(qoi,1),
-                                      100*results['statistical_moments'][qoi]['std']/results['statistical_moments'][qoi]['mean']),
-              end=' ')
-        print("%9s"%unit[qoi], end='  ')
+        if latex:
+            q = plot_labels.get(qoi, qoi)
+        else:
+            q = qoi
+            
+        print("%12s"%q, end=sep)
+        print("% 6.3g%s% 6.1f%s"%(results['statistical_moments'][qoi]['mean'] * scale.get(qoi,1), sep,
+                       #% 6.3g%s             # results['statistical_moments'][qoi]['std'] * scale.get(qoi,1), sep, # st.dev.
+                                               100*results['statistical_moments'][qoi]['std']/results['statistical_moments'][qoi]['mean'], sep),
+              end='')
+        print("%9s"%unit[qoi], end='')
         for v in var:
-            print('%9.3g'%results['sobols_first'][qoi][v], end=' ')
-        print()
-    
-    
+            print('%s %5.3f'%(sep, results['sobols_first'][qoi][v]), end='')
+        print(end)
 
+    if latex:
+        print(r'\hline')
+        print(r'\end{tabular}')
+    print()
+    
+    # print multi-variable Sobol indices
+    if args.sampler == 'sc':  # multi-var Sobol indices are not available for PCE
+        for qoi in output_columns: 
+            print(qoi, end=' ')
+                  #results['statistical_moments'][qoi]['mean'][0], 
+                  #results['statistical_moments'][qoi]['std'][0], end=' ')
+            sobols = results['sobols'][qoi]
+            for k in sobols:
+                if len(k) > 1: # print only the combined indices
+                    print(f"{k}: {sobols[k][0]:5.3f}", end=' ')
+            print()
+
+        
     # print(analysis.get_sample_array('cfrac'))  # just the sample values, no coordinates.
     # print(my_campaign.get_collation_result()) # a Pandas dataframe
+    
+    mplparams = {"figure.figsize" : [5.31, 3],  # figure size in inches
+                 "figure.dpi"     :  200,      # figure dots per inch
+                 "font.size"      :  7,        # this one acutally changes tick labels
+                 'svg.fonttype'    : 'none',   # plot text as text - not paths or clones or other nonsense
+                 #             "legend.fontsize": "large",   # these don't seem to do anything for the tick label font size
+                 #             "axes.labelsize":  "large",
+                 #             "axes.titlesize":  "large",
+                 #             "xtick.labelsize": "large",
+                 #             "ytick.labelsize": "large",
+    }
+    plt.rcParams.update(mplparams)
 
+    
     scalar_outputs = output_columns # [:-1]
     #plt.plot(data['Nc_0'], data['prec'], 'o')
     params = vary.keys()
     fig, ax = plt.subplots(nrows=len(scalar_outputs), ncols=len(params),
-                        sharex='col', sharey='row', squeeze=False)
-
-    for i,param in enumerate(params):
-        for j,qoi in enumerate(scalar_outputs):
+                           sharex='col', sharey='row', squeeze=False) # constrained_layout=True - sounds nice but didn't work
+    # fig.set_tight_layout(True) - didn't work either.
+    
+    ticks = {
+        'poissondigits' : [2,4,6,8,10,12],
+        'iadv' : [0,1],
+        'iadv_sv' : [0,1,2],
+        'l_sb' : [0,1],
+    }
+    ticklabels = {
+        'iadv' : ['2nd', '5th'],
+        'iadv_sv' : ['2nd', '5th', 'kappa'],
+        'l_sb' : ['KK00', 'SB']
+    }
+    
+    for i,param in enumerate(params):            # column
+        for j,qoi in enumerate(scalar_outputs):  # row
             x = data[param] * scale.get(param,1)
             y = data[qoi]   * scale.get(qoi,1)
-            ax[j][i].plot(x, y, 'o')
+            ax[j][i].plot(x, y, '.', ms=2)
+
+            if param in ticks:
+                ax[j][i].set_xticks(ticks[param])
+                if param in ticklabels:
+                    ax[j][i].set_xticklabels(ticklabels[param])
+                
+            # hide internal tick marks
+            if i==0:
+                ax[j][i].yaxis.set_ticks_position('left')
+            else:
+                ax[j][i].yaxis.set_ticks_position('none')
+            if j==len(scalar_outputs)-1:
+                ax[j][i].xaxis.set_ticks_position('bottom')
+            else:
+                ax[j][i].xaxis.set_ticks_position('none')
+
+            
+    # labels after adding all plots, hoping for better placement
+    for i,param in enumerate(params):
+        for j,qoi in enumerate(scalar_outputs):
             xu = unit.get(param,'')
             yu = unit.get(qoi,'')
             if xu: xu = f"({xu})"
             if yu: yu = f"({yu})"
-            ax[j][i].set(xlabel=f"{param} {xu}", ylabel=f"{qoi}\n{yu}")
+            param_label = plot_labels.get(param, param)
+            qoi_label = plot_labels.get(qoi, qoi)
 
+            ax[j][i].set(xlabel=f"{param_label} {xu}")
+            ax[j][i].set_ylabel(f"{qoi_label}\n{yu}", rotation=0)
+            
     for a in ax.flat:
         a.label_outer()
         a.ticklabel_format(axis='y', style='sci', scilimits=(-5,5), useOffset=None, useLocale=None, useMathText=True)            
+
+    if args.plot:
+        print('Saving plot as', args.plot)
+        plt.savefig(args.plot)
     plt.show()
