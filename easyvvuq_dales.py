@@ -9,6 +9,7 @@ from easyvvuq.decoders.json import JSONDecoder
 from easyvvuq.encoders.jinja_encoder import JinjaEncoder
 import fabsim3_cmd_api as fab
 import numpy
+import numpy.random
 
 # Analyzing DALES with EasyVVUQ
 # based on EasyVVUQ gauss tutorial
@@ -222,7 +223,9 @@ experiment_options = {
 vary, order = experiment_options[args.experiment]
 print('Parameters chosen for variation:', vary)
 
-output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'we', 'walltime']
+output_columns = ['cfrac', 'lwp', 'rwp', 'zb', 'zi', 'prec', 'wq', 'wtheta', 'walltime']
+# omitted to save space: we
+
 unit={
      'cfrac' :'',
      'lwp'   :'g/m$^2$',
@@ -233,8 +236,7 @@ unit={
      'wq'    :'g/kg m/s',
      'wtheta':'K m/s',
      'we'    :'m/s',
-
-     'z0'    :'m',
+     'z0'    :'mm',
      'Nc_0'  :'cm$^{-3}$',
      'walltime':'h',
      'ps'      :'Pa',
@@ -242,20 +244,21 @@ unit={
 }
 
 scale={ 
-    'lwp'      : 1000,    # convert kg/m^2 to g/m^2
-    'rwp'      : 1000,    # convert kg/m^2 to g/m^2
-    'wq'       : 1000,    # convert kg/kg m/s to g/kg m/s
-    'zi'       : .001,    # convert m to km
-    'zb'       : .001,    # convert m to km
-    'Nc_0'     : 1e-6,    # convert m$^{-3}$, cm$^{-3}$, 
-    'walltime' : 1.0/3600 # convert seconds to hours
+    'lwp'      : 1000,     # convert kg/m^2 to g/m^2
+    'rwp'      : 1000,     # convert kg/m^2 to g/m^2
+    'wq'       : 1000,     # convert kg/kg m/s to g/kg m/s
+    'zi'       : .001,     # convert m to km
+    'zb'       : .001,     # convert m to km
+    'Nc_0'     : 1e-6,     # convert m$^{-3}$, cm$^{-3}$, 
+    'walltime' : 1.0/3600, # convert seconds to hours
+    'z0'       : 1000      # convert m to mm
 }
 
 plot_labels = {
     'wtheta'   : r'$w_{\theta}$',
     'wq'       : '$w_q$',
     'we'       : '$w_e$',
-    'walltime' : 'time',
+    'walltime' : r'$\tau$',
     'zi'       : '$z_i$',
     'zb'       : '$z_b$',
     'iadv'     : 'adv.',
@@ -313,9 +316,6 @@ if args.prepare:
 
     # all run directories, and the database are created under workdir
     
-    # json database can contain vector-valued QoI's.  - gone since 22.4.2020
-    # the default sql database cannot, at the moment.
-
     # 3. Wrap Application
     #    - Define a new application, and the encoding/decoding elements it needs
     #    - Also requires a collation element - this will be responsible for aggregating the results
@@ -407,7 +407,8 @@ if args.analyze:
 
     # 8. Collate output
     my_campaign.collate()
-
+    # to re-run all collation, use my_campaign.recollate()
+    
     data = my_campaign.get_collation_result()
     print(data)
 #    print(type(data['qt'][0]))
@@ -450,11 +451,11 @@ if args.analyze:
         percent='%'
         
     if latex:
-        print('\\begin{tabular}{lrrl*{%d}{r}}'%len(var))
+        print('\\begin{tabular}{lrr*{%d}{r}}'%len(var))
         print(r'\hline')
 
     #print("                                                  Sobol indices")
-    print(f"       QOI  {sep}    mean {sep}std({percent}){sep}     unit", end='')
+    print(f"       QoI  {sep}    mean {sep}std({percent})", end='')
     for v in var:
         if latex:
             v = plot_labels.get(v, v)
@@ -470,11 +471,11 @@ if args.analyze:
             q = qoi
             
         print("%12s"%q, end=sep)
-        print("% 6.3g%s% 6.1f%s"%(results['statistical_moments'][qoi]['mean'] * scale.get(qoi,1), sep,
+        print("% 6.3g %9s%s% 6.1f"%(results['statistical_moments'][qoi]['mean'] * scale.get(qoi,1), unit[qoi], sep,
                        #% 6.3g%s             # results['statistical_moments'][qoi]['std'] * scale.get(qoi,1), sep, # st.dev.
-                                               100*results['statistical_moments'][qoi]['std']/results['statistical_moments'][qoi]['mean'], sep),
+                                               100*results['statistical_moments'][qoi]['std']/results['statistical_moments'][qoi]['mean']),
               end='')
-        print("%9s"%unit[qoi], end='')
+        #print("%9s"%unit[qoi], end='')
         for v in var:
             print('%s %5.3f'%(sep, results['sobols_first'][qoi][v]), end='')
         print(end)
@@ -500,10 +501,16 @@ if args.analyze:
     # print(analysis.get_sample_array('cfrac'))  # just the sample values, no coordinates.
     # print(my_campaign.get_collation_result()) # a Pandas dataframe
     
-    mplparams = {"figure.figsize" : [5.31, 3],  # figure size in inches
+    mplparams = {"figure.figsize" : [5.31, 4],  # figure size in inches
                  "figure.dpi"     :  200,      # figure dots per inch
-                 "font.size"      :  7,        # this one acutally changes tick labels
-                 'svg.fonttype'    : 'none',   # plot text as text - not paths or clones or other nonsense
+                 "font.size"      :  6,        # this one acutally changes tick labels
+                 'svg.fonttype'   : 'none',   # plot text as text - not paths or clones or other nonsense
+                 'axes.linewidth' : .5, 
+                 'xtick.major.width' : .5,
+                 'ytick.major.width' : .5,
+                 'font.family' : 'sans-serif',
+                 'font.sans-serif' : ['PT Sans'],
+                 
                  #             "legend.fontsize": "large",   # these don't seem to do anything for the tick label font size
                  #             "axes.labelsize":  "large",
                  #             "axes.titlesize":  "large",
@@ -525,18 +532,37 @@ if args.analyze:
         'iadv' : [0,1],
         'iadv_sv' : [0,1,2],
         'l_sb' : [0,1],
+        'seed' : [],
     }
     ticklabels = {
         'iadv' : ['2nd', '5th'],
         'iadv_sv' : ['2nd', '5th', 'kappa'],
         'l_sb' : ['KK00', 'SB']
     }
-    
+
+#    gp = []
+#    for p in params:
+#        if p != 'seed':
+#            gp.append(p)
+#    print('Grouping params', gp)
+#    qoi='zb'
+#    g = data.groupby(gp)[qoi].apply(list)
+#    for r in g.iterrows():
+#        print(r)
+
+    symbolsize = 1
+    if len(params) == 2:
+        symbolsize = 1.5 # larger symbols for the plot with fewer params
+        
     for i,param in enumerate(params):            # column
         for j,qoi in enumerate(scalar_outputs):  # row
             x = data[param] * scale.get(param,1)
             y = data[qoi]   * scale.get(qoi,1)
-            ax[j][i].plot(x, y, '.', ms=2)
+            xr = max(x) - min(x)
+
+            # add spread in x, to show point cloud better
+            x += (numpy.random.rand(len(x))-.5) * xr * .05            
+            ax[j][i].plot(x, y, 'o', ms=symbolsize, mec='none', color='#ff8000')
 
             if param in ticks:
                 ax[j][i].set_xticks(ticks[param])
@@ -565,13 +591,17 @@ if args.analyze:
             qoi_label = plot_labels.get(qoi, qoi)
 
             ax[j][i].set(xlabel=f"{param_label} {xu}")
-            ax[j][i].set_ylabel(f"{qoi_label}\n{yu}", rotation=0)
+            ax[j][i].set_ylabel(f"{qoi_label}", rotation=0)  #for y unit: \n{yu}
+            ax[j][i].spines['top'].set_visible(False)
+            ax[j][i].spines['right'].set_visible(False)
             
     for a in ax.flat:
         a.label_outer()
         a.ticklabel_format(axis='y', style='sci', scilimits=(-5,5), useOffset=None, useLocale=None, useMathText=True)            
 
+    plt.subplots_adjust(left=.1, top=.99, bottom=.1, right=.99, wspace=.01, hspace=.01)
+    
     if args.plot:
         print('Saving plot as', args.plot)
         plt.savefig(args.plot)
-    plt.show()
+    #plt.show()
