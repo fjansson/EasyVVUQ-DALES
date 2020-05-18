@@ -67,6 +67,22 @@ Access details of the remote computer system, settings for the DALES installatio
 and run-time settings for the maximal wallclock time and number of MPI tasks for a job
 need to be added to the FabSim configuration files, e.g. `deploy/machines_user.yml`.
 
+### Example Runs
+
+The following is three runs with matching templates and experiment definitions, for use with the FabSim3 job system.
+For a full analysis, each requires a sequence of four invocations, with the last command line option being `--prepare`, `--run`, `--fetch`, and `--analyze`.
+
+```
+# Physcal parameters, 256 samples 
+python easyvvuq_dales.py --workdir=~/work --fab --template=namoptions-z0.template --campaign=physics_z0.json --experiment=physics_z0 --prepare
+
+# Model choices, 72 samples
+python easyvvuq_dales.py --workdir=~/work --fab --template=namoptions-choices.template --campaign=choices.json --experiment=choices --prepare
+
+# Iterative Poisson-solver tolerance, 35 samples
+python easyvvuq_dales.py --workdir=~/work --fab --template=namoptions-poisson.template --campaign=poissondigits.json --experiment=poisson --prepare
+```
+
 ## License
 
 The scripts in this repository are made available under the terms of
