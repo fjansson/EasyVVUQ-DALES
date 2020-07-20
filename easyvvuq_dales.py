@@ -174,7 +174,7 @@ vary_choices = {
 # note use namoptions.poisson template which has iterative solver
 vary_poisson = {
     "seed"    : cp.DiscreteUniform(1, 2000),
-    "poissondigits": cp.Uniform(2,13)
+    "poissondigits": cp.Uniform(2,13),
     # the iteration doesn't always converge when poissondigits >= 14
 }
 
@@ -400,17 +400,24 @@ if args.analyze:
     results = my_campaign.get_last_analysis()
 
     # from here on, it's reporting and plotting
+
+    var = list(vary.keys()) # names of the parameters we vary
+    if 'seed' in var:
+        # put 'seed' last for consistency
+        # cannot change the vary dict after the runs are already done (EasyVVUQ issue?)
+        var.remove('seed')
+        var.append('seed')
     
     print(f"sampler: {args.sampler}, order: {args.order}")
     print('         --- Varied input parameters ---')
     print("  param    default      unit     distribution")
-    for k in vary.keys():
+    for k in var:
         print("%8s %9.3g %9s  %s"%(k, params[k]['default'], unit.get(k, ''), str(vary[k])))
     print()
 
     print('         --- Output ---')
-    var = list(vary.keys())
 
+    
     latex = True # output tables in LaTeX format
     if latex:
         sep=' &'       # column separator
@@ -471,7 +478,7 @@ if args.analyze:
         
     # print(my_campaign.get_collation_result()) # a Pandas dataframe
     
-    mplparams = {"figure.figsize" : [5.31, 4],  # figure size in inches
+    mplparams = {"figure.figsize" : [5.31, 5],  # figure size in inches
                  "figure.dpi"     :  200,      # figure dots per inch
                  "font.size"      :  6,        # this one acutally changes tick labels
                  'svg.fonttype'   : 'none',   # plot text as text - not paths or clones or other nonsense
@@ -480,11 +487,12 @@ if args.analyze:
                  'ytick.major.width' : .5,
                  'font.family' : 'sans-serif',
                  'font.sans-serif' : ['PT Sans'],
+                 # mathmode font not yet set !
     }
     plt.rcParams.update(mplparams)
 
     scalar_outputs = output_columns # [:-1]
-    params = vary.keys()
+    params = var
     fig, ax = plt.subplots(nrows=len(scalar_outputs), ncols=len(params),
                            sharex='col', sharey='row', squeeze=False) # constrained_layout=True - sounds nice but didn't work
     # fig.set_tight_layout(True) - didn't work either.
@@ -550,13 +558,15 @@ if args.analyze:
             ax[j][i].set_ylabel(f"{qoi_label}", rotation=0)  #for y unit: \n{yu}
             ax[j][i].spines['top'].set_visible(False)
             ax[j][i].spines['right'].set_visible(False)
+            ax[j][i].patch.set_visible(False) # remove background rectangle?
             
     for a in ax.flat:
         a.label_outer()
         a.ticklabel_format(axis='y', style='sci', scilimits=(-5,5), useOffset=None, useLocale=None, useMathText=True)            
 
-    plt.subplots_adjust(left=.1, top=.99, bottom=.1, right=.99, wspace=.01, hspace=.01)
-    
+    plt.subplots_adjust(left=.1, top=.99, bottom=.1, right=.99, wspace=0, hspace=0)
+    fig.patch.set_visible(False) # remove background rectangle?
+
     if args.plot:
         print('Saving plot as', args.plot)
         plt.savefig(args.plot)
